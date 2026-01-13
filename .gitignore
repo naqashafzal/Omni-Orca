@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Configuration (Secrets)
+config.json
+
+# Logs and databases
+*.log
+*.sqlite
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Recordings
+recording.json

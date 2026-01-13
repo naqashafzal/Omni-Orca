@@ -1,0 +1,8 @@
+playwright
+pytest
+asyncio
+SpeechRecognition
+pyaudio
+customtkinter
+Pillow
+google-generativeai
