@@ -4,7 +4,7 @@ import threading
 import sys
 from browser_agent import BrowserAgent
 from voice_commander import VoiceCommander
-from gemini_client import GeminiClient
+from llm_provider import LLMClient
 from config_manager import ConfigManager
 
 # --- Theme Configuration ---
@@ -43,16 +43,25 @@ class App(ctk.CTk):
         except:
             self.voice_available = False
 
-        self.gemini = GeminiClient()
+        self.llm = LLMClient()
         
-        # Load API Key from Config
+        # Load API Key from Config and configure provider
         saved_key = self.cfg.get("api_key")
+        saved_provider = self.cfg.get("llm_provider") or "gemini"  # Default to gemini
         self.use_ai = False
-        if saved_key:
-            self.gemini.configure(saved_key)
+        
+        if saved_key and saved_provider == "gemini":
+            self.llm.configure_gemini(saved_key)
+            self.use_ai = True
+        elif saved_provider == "ollama":
+            ollama_model = self.cfg.get("ollama_model") or "llava:latest"
+            self.llm.configure_ollama(ollama_model)
             self.use_ai = True
 
         self.is_listening = False
+        self.autopilot_active = False
+        self.autopilot_stop_requested = False
+        self.autopilot_max_iterations = 20
 
         # --- TABVIEW ---
         self.tab_view = ctk.CTkTabview(self, fg_color=COLOR_BG)
@@ -129,6 +138,13 @@ class App(ctk.CTk):
         self.btn_voice.pack(side="left", padx=20, pady=20)
         if not self.voice_available: self.btn_voice.configure(state="disabled", text="VOX N/A")
 
+        self.autopilot_checkbox = ctk.CTkCheckBox(self.cmd_frame, text="🤖 AUTO-PILOT", font=("Consolas", 11, "bold"), text_color=COLOR_ACCENT)
+        self.autopilot_checkbox.pack(side="left", padx=10, pady=20)
+
+        self.btn_stop_autopilot = ctk.CTkButton(self.cmd_frame, text="⏹ STOP", command=self.stop_autopilot, width=80, fg_color=COLOR_ERROR, hover_color="#990000", text_color="white", font=("Consolas", 11, "bold"))
+        self.btn_stop_autopilot.pack(side="left", padx=5, pady=20)
+        self.btn_stop_autopilot.pack_forget()  # Hide initially
+
         self.entry_cmd = ctk.CTkEntry(self.cmd_frame, placeholder_text="ENTER COMMAND SEQUENCE...", font=("Consolas", 14), fg_color="#000000", border_color="#333", text_color="white")
         self.entry_cmd.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=20)
         self.entry_cmd.bind("<Return>", lambda event: self.submit_text_command())
@@ -158,12 +174,41 @@ class App(ctk.CTk):
         self.lbl_api_status = ctk.CTkLabel(self.frame_api, text="", font=("Consolas", 12))
         self.lbl_api_status.pack(anchor="w", padx=20, pady=(0, 20))
 
-        # Model Config Section (Optional future expansion)
+        # Model Config Section
         self.frame_model = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10)
         self.frame_model.pack(fill="x", padx=20, pady=10)
-        ctk.CTkLabel(self.frame_model, text="MODEL CONFIGURATION", font=("Consolas", 12, "bold")).pack(anchor="w", padx=20, pady=(20, 5))
-        self.lbl_model = ctk.CTkLabel(self.frame_model, text=f"CURRENT MODEL: {self.cfg.get('model_name')}", font=("Consolas", 12))
-        self.lbl_model.pack(anchor="w", padx=20, pady=(0, 20))
+        ctk.CTkLabel(self.frame_model, text="LLM PROVIDER", font=("Consolas", 12, "bold")).pack(anchor="w", padx=20, pady=(20, 5))
+        
+        # Provider selection
+        self.provider_var = ctk.StringVar(value=self.cfg.get("llm_provider") or "gemini")
+        provider_frame = ctk.CTkFrame(self.frame_model, fg_color="transparent")
+        provider_frame.pack(anchor="w", padx=20, pady=5)
+        
+        self.radio_gemini = ctk.CTkRadioButton(provider_frame, text="Google Gemini (Cloud)", variable=self.provider_var, value="gemini", command=self.on_provider_change)
+        self.radio_gemini.pack(side="left", padx=10)
+        
+        self.radio_ollama = ctk.CTkRadioButton(provider_frame, text="Ollama (Local)", variable=self.provider_var, value="ollama", command=self.on_provider_change)
+        self.radio_ollama.pack(side="left", padx=10)
+        
+        # Ollama configuration
+        self.frame_ollama = ctk.CTkFrame(self.frame_model, fg_color="transparent")
+        self.frame_ollama.pack(anchor="w", padx=20, pady=10, fill="x")
+        
+        ctk.CTkLabel(self.frame_ollama, text="Ollama Model:", font=("Consolas", 10)).pack(side="left", padx=5)
+        self.ollama_model_entry = ctk.CTkEntry(self.frame_ollama, width=200, placeholder_text="llava:latest")
+        self.ollama_model_entry.pack(side="left", padx=5)
+        if self.cfg.get("ollama_model"):
+            self.ollama_model_entry.insert(0, self.cfg.get("ollama_model"))
+        
+        self.btn_save_ollama = ctk.CTkButton(self.frame_ollama, text="SAVE & CONNECT", command=self.save_ollama_config, width=120, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black")
+        self.btn_save_ollama.pack(side="left", padx=5)
+        
+        # Show/hide based on selection
+        self.on_provider_change()
+        
+        # Current status
+        self.lbl_model = ctk.CTkLabel(self.frame_model, text=f"CURRENT: {self.llm.get_provider_name().upper()}", font=("Consolas", 12))
+        self.lbl_model.pack(anchor="w", padx=20, pady=(10, 20))
 
 
     # --- Settings Logic ---
@@ -179,23 +224,47 @@ class App(ctk.CTk):
         threading.Thread(target=self._test_api_thread, args=(key,)).start()
 
     def _test_api_thread(self, key):
-        # Temp configure to test
-        previous_key = self.gemini.api_key
         try:
-            self.gemini.configure(key)
-            # Try a dummy generation
-            self.gemini.model.generate_content("ping")
+            # Test by configuring Gemini
+            self.llm.configure_gemini(key)
+            # Try a dummy generation (access the provider directly for testing)
+            if hasattr(self.llm.provider, 'model'):
+                self.llm.provider.model.generate_content("ping")
             
             # success
             self.cfg.set("api_key", key)
+            self.cfg.set("llm_provider", "gemini")
             self.use_ai = True
             self.after(0, lambda: self.lbl_api_status.configure(text="STATUS: CONNECTION SUCCESSFUL. SAVED.", text_color=COLOR_SUCCESS))
+            self.after(0, lambda: self.lbl_model.configure(text=f"CURRENT: {self.llm.get_provider_name().upper()}"))
             self.log("SETTINGS: API KEY UPDATED AND VERIFIED.")
         except Exception as e:
-            # Revert if failed (optional, or leave broken)
-            # self.gemini.configure(previous_key) 
             error_msg = str(e)
             self.after(0, lambda: self.lbl_api_status.configure(text=f"STATUS: FAILED - {error_msg}", text_color=COLOR_ERROR))
+
+    def on_provider_change(self):
+        """Show/hide provider-specific settings"""
+        provider = self.provider_var.get()
+        if provider == "ollama":
+            self.frame_ollama.pack(anchor="w", padx=20, pady=10, fill="x")
+            self.frame_api.pack_forget()
+        else:
+            self.frame_ollama.pack_forget()
+            self.frame_api.pack(fill="x", padx=20, pady=10)
+
+    def save_ollama_config(self):
+        """Save and connect to Ollama"""
+        model = self.ollama_model_entry.get().strip() or "llava:latest"
+        
+        try:
+            self.llm.configure_ollama(model)
+            self.cfg.set("llm_provider", "ollama")
+            self.cfg.set("ollama_model", model)
+            self.use_ai = True
+            self.lbl_model.configure(text=f"CURRENT: OLLAMA ({model})")
+            self.log(f"SETTINGS: OLLAMA CONFIGURED ({model})")
+        except Exception as e:
+            self.log(f"ERROR: Failed to configure Ollama - {str(e)}")
 
 
     # --- Utilities ---
@@ -203,8 +272,18 @@ class App(ctk.CTk):
         self.log_textbox.insert("end", f">> {message}\n")
         self.log_textbox.see("end")
 
-    def update_log_from_thread(self, message):
-         self.after(0, lambda: self.log(message))
+    def update_log_from_thread(self, message, color=None):
+        """Thread-safe log update with optional color."""
+        if color:
+            self.after(0, lambda: self._log_colored(message, color))
+        else:
+            self.after(0, lambda: self.log(message))
+
+    def _log_colored(self, message, color):
+        """Log with custom color."""
+        self.log_textbox.insert("end", f">> {message}\n", color)
+        self.log_textbox.tag_config(color, foreground=color)
+        self.log_textbox.see("end")
 
     # --- Async Infrastructure ---
     def start_async_loop(self):
@@ -239,10 +318,17 @@ class App(ctk.CTk):
         self.entry_cmd.delete(0, 'end')
         self.log(f"MANUAL INPUT: {text}")
         
-        if self.use_ai:
+        # Check if auto-pilot mode is enabled
+        if self.autopilot_checkbox.get():
+            if not self.use_ai:
+                self.log("ERROR: AUTO-PILOT REQUIRES API KEY.")
+                return
+            self.log("INITIATING AUTO-PILOT MODE...")
+            self.run_async(self._autopilot_loop(text))
+        elif self.use_ai:
             self.process_ai_command(text)
         else:
-            self.process_command(text.lower())
+            self.process_command(text)
 
     def process_ai_command(self, text):
         self.log("ANALYZING INTENT via GEMINI (VISION ACTIVE)...")
@@ -263,54 +349,115 @@ class App(ctk.CTk):
         # Multimodal upload might be slow.
         # We can run sync blocking call in a thread executor provided by asyncio
         loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(None, self.gemini.interpret_command, text, screenshot, mode)
+        response = await loop.run_in_executor(None, self.llm.interpret_command, text, screenshot, mode)
         
         self.update_log_from_thread(f"AI PLAN ({mode}): {response}")
         
-        if "error" in response:
-            self.update_log_from_thread(f"AI ERROR: {response['error']}")
-            return
+        # 3. Execute Action Sequence
+        if isinstance(response, dict) and "error" in response:
+             self.update_log_from_thread(f"AI ERROR: {response['error']}")
+             return
 
-        action = response.get("action")
-        
-        # 3. Execute Action
-        if action == "navigate":
-            await self._navigate_task(response.get("url")) # Reuse existing task logic (checking if valid)
-            # Actually _navigate_task is async, so we can await it directly.
-            # But _navigate_task updates log via thread-safe call, which is fine.
-        elif action == "click":
-            await self.agent.click(response.get("selector"))
-        elif action == "type":
-            await self.agent.type(response.get("selector"), response.get("text"))
-        elif action == "back":
-             pass
-        else:
-            self.update_log_from_thread("AI UNCLEAR. FALLING BACK TO REGEX.")
-            self.after(0, lambda: self.process_command(text.lower()))
+        if not isinstance(response, list):
+             self.update_log_from_thread("AI ERROR: INVALID RESPONSE FORMAT.")
+             return
+
+        for step in response:
+            action = step.get("action")
+            self.update_log_from_thread(f"EXECUTING: {action.upper()}")
+            
+            if action == "navigate":
+                await self._navigate_task(step.get("url"))
+            elif action == "click":
+                await self.agent.click(step.get("selector"))
+            elif action == "type":
+                await self.agent.type(step.get("selector"), step.get("text"))
+            elif action == "wait":
+                sec = step.get("seconds", 1)
+                await asyncio.sleep(sec)
+            elif action == "back":
+                 pass # Implement back if needed
+            elif action == "mouse_click":
+                await self.agent.mouse_click(step.get("x"), step.get("y"), 
+                                             step.get("button", "left"), 
+                                             step.get("click_count", 1))
+            elif action == "mouse_move":
+                await self.agent.mouse_move(step.get("x"), step.get("y"))
+            elif action == "hover":
+                await self.agent.hover(step.get("selector"))
+            elif action == "right_click":
+                await self.agent.right_click(step.get("selector"))
+            elif action == "double_click":
+                await self.agent.double_click(step.get("selector"))
+            elif action == "scroll":
+                await self.agent.scroll(step.get("x", 0), step.get("y", 0))
+            elif action == "press_key":
+                await self.agent.press_key(step.get("key"))
+            elif action == "get_text":
+                text = await self.agent.get_text(step.get("selector"))
+                self.update_log_from_thread(f"EXTRACTED TEXT: {text[:100] if text else 'None'}...")
+            elif action == "copy_to_clipboard":
+                await self.agent.copy_to_clipboard(step.get("text"))
+            elif action == "paste_from_clipboard":
+                await self.agent.paste_from_clipboard(step.get("selector"))
+            elif action == "extract_data":
+                data = await self.agent.extract_data(step.get("selector"), step.get("attribute", "textContent"))
+                self.update_log_from_thread(f"EXTRACTED {len(data)} ITEMS")
+            elif action == "wait_for_text":
+                await self.agent.wait_for_text(step.get("text"))
+            else:
+                self.update_log_from_thread(f"UNKNOWN AI ACTION: {action}")
+            
+            # Small delay between steps
+            await asyncio.sleep(0.5)
 
     # Deprecated threaded method
     def _ai_thread(self, text):
         pass 
 
     def process_command(self, command):
-        if "go to" in command or "goto" in command:
-            url = command.replace("go to", "").replace("goto", "").strip()
+        import re
+        command_stripped = command.strip()
+        
+        # Regex patterns (case-insensitive for keywords)
+        match_goto = re.search(r"^(?:go\s*to|goto)\s+(.+)", command_stripped, re.IGNORECASE)
+        match_click = re.search(r"^click\s+(.+)", command_stripped, re.IGNORECASE)
+        match_type = re.search(r"^type\s+(.+)\s+into\s+(.+)", command_stripped, re.IGNORECASE)
+        match_stop = re.search(r"stop\s+listening", command_stripped, re.IGNORECASE)
+
+        if match_goto:
+            url = match_goto.group(1).strip()
             if not url.startswith("http"): url = "https://" + url
             self.run_async(self._navigate_task(url))
-        elif "click" in command:
-            selector = command.replace("click", "").strip()
-            if selector: self.run_async(self.agent.click(selector))
-            else: self.log("ERROR: MISSING TARGET SELECTOR.")
-        elif "stop listening" in command:
+        
+        elif match_click:
+            selector = match_click.group(1).strip()
+            self.run_async(self._click_task(selector))
+            
+        elif match_stop:
              self.toggle_listening()
-        elif "type" in command:
-            if " into " in command:
-                parts = command.replace("type", "").split(" into ")
-                self.run_async(self.agent.type(parts[1].strip(), parts[0].strip()))
-            else:
-                 self.log("SYNTAX ERROR: USE 'type [text] into [selector]'")
+             
+        elif match_type:
+            text_to_type = match_type.group(1).strip()
+            selector = match_type.group(2).strip()
+            self.run_async(self._type_task(selector, text_to_type))
+            
         else:
              self.update_log_from_thread("UNKNOWN COMMAND SEQUENCE.")
+
+    async def _click_task(self, selector):
+        try:
+            await self.agent.click(selector)
+            self.update_log_from_thread(f"CLICKED: {selector}")
+        except Exception as e:
+            self.update_log_from_thread(f"CLICK ERROR: {e}")
+
+    async def _type_task(self, selector, text):
+        try:
+            await self.agent.type(selector, text)
+            self.update_log_from_thread(f"TYPED '{text}' INTO {selector}")
+        except Exception as e:
+            self.update_log_from_thread(f"TYPE ERROR: {e}")
 
     async def _navigate_task(self, url):
         try:
@@ -361,6 +508,118 @@ class App(ctk.CTk):
                     self.process_ai_command(command)
                 else:
                     self.process_command(command)
+
+    # --- Auto-Pilot ---
+    def stop_autopilot(self):
+        """Stops the auto-pilot loop."""
+        self.autopilot_stop_requested = True
+        self.log("AUTO-PILOT STOP REQUESTED...")
+
+    async def _autopilot_loop(self, goal):
+        """Main auto-pilot loop: observe, decide, act, repeat."""
+        self.autopilot_active = True
+        self.autopilot_stop_requested = False
+        self.after(0, lambda: self.btn_stop_autopilot.pack(side="left", padx=5, pady=20))
+        
+        # Start recording
+        self.agent.start_recording(name=goal, mode="autopilot")
+        
+        iteration = 0
+        success = False
+        
+        try:
+            while iteration < self.autopilot_max_iterations and not self.autopilot_stop_requested:
+                iteration += 1
+                self.update_log_from_thread(f"AUTO-PILOT [{iteration}/{self.autopilot_max_iterations}]")
+                
+                # Capture screenshot
+                screenshot = await self.agent.get_screenshot_bytes()
+                
+                # Get AI decision
+                loop = asyncio.get_running_loop()
+                response = await loop.run_in_executor(None, self.llm.autopilot_step, goal, screenshot)
+                
+                # Check for errors
+                if "error" in response:
+                    self.update_log_from_thread(f"AUTO-PILOT ERROR: {response['error']}")
+                    break
+                
+                # Log reasoning
+                reasoning = response.get("reasoning", "")
+                self.update_log_from_thread(f"AI REASONING: {reasoning}", color=COLOR_ACCENT)
+                
+                # Check if completed
+                if response.get("completed", False):
+                    self.update_log_from_thread("AUTO-PILOT: GOAL ACHIEVED!")
+                    success = True
+                    break
+                
+                # Execute actions
+                actions = response.get("actions", [])
+                for step in actions:
+                    action = step.get("action")
+                    self.update_log_from_thread(f"  → {action.upper()}")
+                    
+                    try:
+                        if action == "navigate":
+                            await self._navigate_task(step.get("url"))
+                        elif action == "click":
+                            await self.agent.click(step.get("selector"))
+                        elif action == "type":
+                            await self.agent.type(step.get("selector"), step.get("text"))
+                        elif action == "wait":
+                            sec = step.get("seconds", 1)
+                            await asyncio.sleep(sec)
+                        elif action == "back":
+                            pass  # Implement if needed
+                        elif action == "mouse_click":
+                            await self.agent.mouse_click(step.get("x"), step.get("y"), 
+                                                         step.get("button", "left"), 
+                                                         step.get("click_count", 1))
+                        elif action == "mouse_move":
+                            await self.agent.mouse_move(step.get("x"), step.get("y"))
+                        elif action == "hover":
+                            await self.agent.hover(step.get("selector"))
+                        elif action == "right_click":
+                            await self.agent.right_click(step.get("selector"))
+                        elif action == "double_click":
+                            await self.agent.double_click(step.get("selector"))
+                        elif action == "scroll":
+                            await self.agent.scroll(step.get("x", 0), step.get("y", 0))
+                        elif action == "press_key":
+                            await self.agent.press_key(step.get("key"))
+                        elif action == "get_text":
+                            text = await self.agent.get_text(step.get("selector"))
+                            self.update_log_from_thread(f"EXTRACTED: {text[:100] if text else 'None'}...")
+                        elif action == "copy_to_clipboard":
+                            await self.agent.copy_to_clipboard(step.get("text"))
+                        elif action == "paste_from_clipboard":
+                            await self.agent.paste_from_clipboard(step.get("selector"))
+                        elif action == "extract_data":
+                            data = await self.agent.extract_data(step.get("selector"), step.get("attribute", "textContent"))
+                            self.update_log_from_thread(f"EXTRACTED {len(data)} ITEMS")
+                        elif action == "wait_for_text":
+                            await self.agent.wait_for_text(step.get("text"))
+                    except Exception as e:
+                        self.update_log_from_thread(f"ACTION ERROR: {e}")
+                
+                # Delay between iterations
+                await asyncio.sleep(1.5)
+            
+            if iteration >= self.autopilot_max_iterations:
+                self.update_log_from_thread("AUTO-PILOT: MAX ITERATIONS REACHED.")
+            
+            if self.autopilot_stop_requested:
+                self.update_log_from_thread("AUTO-PILOT: STOPPED BY USER.")
+                
+        finally:
+            # Save recording
+            filename = self.agent.save_recording(success=success)
+            self.update_log_from_thread(f"RECORDING SAVED: {filename}")
+            
+            # Reset state
+            self.autopilot_active = False
+            self.after(0, lambda: self.btn_stop_autopilot.pack_forget())
 
     def on_closing(self):
         self.run_async(self.agent.close())

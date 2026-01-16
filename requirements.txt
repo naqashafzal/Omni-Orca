@@ -6,3 +6,4 @@ pyaudio
 customtkinter
 Pillow
 google-generativeai
+requests
