@@ -286,6 +286,45 @@ class BrowserAgent:
                 data.append(value.strip())
         return data
 
+    async def scrape_data(self, container_selector, field_selectors):
+        """
+        Scrape structured data from a list of items.
+        
+        Args:
+            container_selector (str): Selector for the item container (e.g., '.product-card')
+            field_selectors (dict): Dict of { "Column Name": "relative_selector" }
+        
+        Returns:
+            list[dict]: List of scraped items.
+        """
+        if not self.page:
+            raise Exception("Browser not started.")
+            
+        print(f"Scraping structured data from {container_selector}...")
+        
+        # We use evaluate to run the scraping logic in the browser context for speed
+        # passing the dict as an argument
+        data = await self.page.evaluate("""
+            ([container, fields]) => {
+                const items = document.querySelectorAll(container);
+                const results = [];
+                
+                items.forEach(item => {
+                    const row = {};
+                    for (const [key, selector] of Object.entries(fields)) {
+                        const el = item.querySelector(selector);
+                        row[key] = el ? el.innerText.trim() : "";
+                    }
+                    results.push(row);
+                });
+                
+                return results;
+            }
+        """, [container_selector, field_selectors])
+        
+        print(f"Scraped {len(data)} items.")
+        return data
+
     async def wait_for_text(self, text, timeout=30000):
         """Wait for specific text to appear on page"""
         if not self.page:

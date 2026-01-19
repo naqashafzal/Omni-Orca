@@ -7,3 +7,7 @@ customtkinter
 Pillow
 google-generativeai
 requests
+pyttsx3
+schedule
+pandas
+cryptography

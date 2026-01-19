@@ -6,6 +6,13 @@ from browser_agent import BrowserAgent
 from voice_commander import VoiceCommander
 from llm_provider import LLMClient
 from config_manager import ConfigManager
+import schedule
+import time
+import pandas as pd
+from tts_engine import TTSEngine
+from auth_handler import perform_login, PLATFORM_MAP
+from content_engine import ContentGenerator
+from PIL import Image, ImageTk
 
 # --- Theme Configuration ---
 ctk.set_appearance_mode("Dark")
@@ -44,6 +51,14 @@ class App(ctk.CTk):
             self.voice_available = False
 
         self.llm = LLMClient()
+        self.content_gen = ContentGenerator(self.llm)
+        self.tts = TTSEngine()
+        self.tts.speak("System Initialized")
+        
+        # Scheduler Thread
+        self.scheduler_running = True
+        self.scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
+        self.scheduler_thread.start()
         
         # Load API Key from Config and configure provider
         saved_key = self.cfg.get("api_key")
@@ -68,9 +83,17 @@ class App(ctk.CTk):
         self.tab_view.pack(fill="both", expand=True, padx=10, pady=10)
 
         self.tab_cmd = self.tab_view.add("COMMAND CENTER")
+        self.tab_scheduler = self.tab_view.add("SCHEDULER")
+        self.tab_accounts = self.tab_view.add("ACCOUNTS")
+        self.tab_content = self.tab_view.add("CONTENT STUDIO")
+        self.tab_data = self.tab_view.add("DATA LAB")
         self.tab_settings = self.tab_view.add("SYSTEM SETTINGS")
 
         self._setup_command_tab()
+        self._setup_scheduler_tab()
+        self._setup_accounts_tab()
+        self._setup_content_tab()
+        self._setup_data_tab()
         self._setup_settings_tab()
 
         self.log(">> SYSTEM INITIALIZED...")
@@ -211,6 +234,218 @@ class App(ctk.CTk):
         self.lbl_model.pack(anchor="w", padx=20, pady=(10, 20))
 
 
+    def _setup_scheduler_tab(self):
+        parent = self.tab_scheduler
+        parent.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(parent, text="TASK SCHEDULER", font=("Consolas", 18, "bold"), text_color="gray").pack(pady=20)
+        
+        # Add Task Frame
+        frame_add = ctk.CTkFrame(parent, fg_color=COLOR_PANEL)
+        frame_add.pack(fill="x", padx=20, pady=10)
+        
+        ctk.CTkLabel(frame_add, text="NEW TASK", font=("Consolas", 12, "bold")).pack(anchor="w", padx=10, pady=5)
+        
+        self.entry_sched_time = ctk.CTkEntry(frame_add, placeholder_text="HH:MM (24h)", width=100)
+        self.entry_sched_time.pack(side="left", padx=10, pady=10)
+        
+        self.option_sched_type = ctk.CTkOptionMenu(frame_add, values=["REPLAY", "AUTO-PILOT"], width=120)
+        self.option_sched_type.pack(side="left", padx=10, pady=10)
+        
+        self.entry_sched_target = ctk.CTkEntry(frame_add, placeholder_text="Filename or Goal", width=200)
+        self.entry_sched_target.pack(side="left", padx=10, pady=10)
+        
+        btn_add = ctk.CTkButton(frame_add, text="SCHEDULE", command=self.add_scheduled_task, fg_color=COLOR_ACCENT, text_color="black")
+        btn_add.pack(side="left", padx=10, pady=10)
+        
+        # Task List
+        self.sched_list_frame = ctk.CTkScrollableFrame(parent, fg_color="transparent", label_text="ACTIVE SCHEDULES")
+        self.sched_list_frame.pack(fill="both", expand=True, padx=20, pady=10)
+
+    def _setup_accounts_tab(self):
+        parent = self.tab_accounts
+        parent.grid_columnconfigure(1, weight=1)
+        parent.grid_rowconfigure(0, weight=1)
+
+        # Left: List
+        self.frame_acc_list = ctk.CTkScrollableFrame(parent, width=250, label_text="SAVED ACCOUNTS")
+        self.frame_acc_list.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        
+        # Right: Editor
+        self.frame_acc_edit = ctk.CTkFrame(parent, fg_color=COLOR_PANEL)
+        self.frame_acc_edit.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        
+        ctk.CTkLabel(self.frame_acc_edit, text="ADD / EDIT ACCOUNT", font=("Consolas", 16, "bold")).pack(pady=20)
+        
+        self.option_platform = ctk.CTkOptionMenu(self.frame_acc_edit, values=list(PLATFORM_MAP.keys()))
+        self.option_platform.pack(pady=10)
+        
+        self.entry_acc_user = ctk.CTkEntry(self.frame_acc_edit, placeholder_text="Username / Email", width=250)
+        self.entry_acc_user.pack(pady=10)
+        
+        self.entry_acc_pass = ctk.CTkEntry(self.frame_acc_edit, placeholder_text="Password", show="*", width=250)
+        self.entry_acc_pass.pack(pady=10)
+        
+        btn_save_acc = ctk.CTkButton(self.frame_acc_edit, text="SAVE ENCRYPTED", command=self.save_account, fg_color=COLOR_SUCCESS, text_color="black")
+        btn_save_acc.pack(pady=20)
+        
+        self.refresh_account_list()
+
+    def refresh_account_list(self):
+        # Clear existing
+        for widget in self.frame_acc_list.winfo_children():
+            widget.destroy()
+            
+        accounts = self.cfg.get_all_accounts()
+        for platform in accounts:
+            f = ctk.CTkFrame(self.frame_acc_list, fg_color=COLOR_BG)
+            f.pack(fill="x", pady=5, padx=5)
+            
+            ctk.CTkLabel(f, text=platform, font=("Consolas", 12, "bold")).pack(side="left", padx=10)
+            
+            btn_login = ctk.CTkButton(f, text="INSTANT SIGN IN", width=100, 
+                                      command=lambda p=platform: self.instant_login(p),
+                                      fg_color=COLOR_ACCENT, text_color="black")
+            btn_login.pack(side="right", padx=5, pady=5)
+
+    def save_account(self):
+        platform = self.option_platform.get()
+        user = self.entry_acc_user.get()
+        pwd = self.entry_acc_pass.get()
+        
+        if not user or not pwd:
+            return
+            
+        self.cfg.save_account(platform, user, pwd)
+        self.entry_acc_user.delete(0, "end")
+        self.entry_acc_pass.delete(0, "end")
+        self.refresh_account_list()
+        self.tts.speak(f"{platform} account saved")
+
+    def instant_login(self, platform):
+        self.log(f"INITIATING INSTANT LOGIN: {platform}")
+        self.tts.speak(f"Signing in to {platform}")
+        
+        creds = self.cfg.get_account(platform)
+        if not creds: return
+        
+        self.run_async(self._login_task(platform, creds["username"], creds["password"]))
+
+    async def _login_task(self, platform, user, pwd):
+        try:
+            await perform_login(self.agent, platform, user, pwd)
+            self.update_log_from_thread(f"LOGIN SUBMITTED FOR {platform}")
+            self.tts.speak("Login submitted")
+        except Exception as e:
+            self.update_log_from_thread(f"LOGIN ERROR: {e}")
+            self.tts.speak("Login failed")
+
+    def _setup_content_tab(self):
+        parent = self.tab_content
+        parent.grid_columnconfigure(1, weight=1)
+        parent.grid_rowconfigure(0, weight=1)
+
+        # Left: Controls
+        frame_controls = ctk.CTkFrame(parent, width=300, fg_color=COLOR_PANEL)
+        frame_controls.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        
+        ctk.CTkLabel(frame_controls, text="CREATIVE SUITE", font=("Consolas", 16, "bold")).pack(pady=20)
+        
+        self.entry_topic = ctk.CTkEntry(frame_controls, placeholder_text="Enter Topic (e.g. Future of AI)", width=250)
+        self.entry_topic.pack(pady=10)
+        
+        self.option_content_platform = ctk.CTkOptionMenu(frame_controls, values=["Twitter", "LinkedIn", "Instagram", "Facebook"])
+        self.option_content_platform.pack(pady=10)
+        
+        btn_gen = ctk.CTkButton(frame_controls, text="✨ GENERATE MAGIC", command=self.generate_content, fg_color=COLOR_ACCENT, text_color="black")
+        btn_gen.pack(pady=20)
+        
+        btn_save_content = ctk.CTkButton(frame_controls, text="SAVE ASSETS", command=self.save_generated_content, fg_color=COLOR_SUCCESS, text_color="black")
+        btn_save_content.pack(pady=10)
+        
+        self.lbl_content_status = ctk.CTkLabel(frame_controls, text="", font=("Consolas", 11))
+        self.lbl_content_status.pack(pady=10)
+
+        # Right: Preview
+        frame_preview = ctk.CTkScrollableFrame(parent, fg_color="transparent", label_text="PREVIEW")
+        frame_preview.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        
+        self.txt_content_out = ctk.CTkTextbox(frame_preview, height=150, font=("Consolas", 12))
+        self.txt_content_out.pack(fill="x", padx=10, pady=10)
+        
+        self.lbl_image_preview = ctk.CTkLabel(frame_preview, text="[IMAGE PREVIEW]", height=300, fg_color="#222")
+        self.lbl_image_preview.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        self.current_generated_image = None
+
+    def generate_content(self):
+        topic = self.entry_topic.get()
+        platform = self.option_content_platform.get()
+        
+        if not topic: return
+        
+        self.lbl_content_status.configure(text="GENERATING...", text_color="yellow")
+        self.tts.speak("Generating content")
+        
+        # Run in thread
+        threading.Thread(target=self._gen_content_thread, args=(topic, platform)).start()
+
+    def _gen_content_thread(self, topic, platform):
+        # 1. Text
+        text = self.content_gen.generate_text(topic, platform)
+        self.after(0, lambda: self.txt_content_out.delete("0.0", "end"))
+        self.after(0, lambda: self.txt_content_out.insert("0.0", text))
+        
+        # 2. Image
+        image = self.content_gen.generate_image(topic)
+        if image:
+            self.current_generated_image = image
+            # Resize for preview
+            preview_img = ctk.CTkImage(light_image=image, dark_image=image, size=(300, 300))
+            self.after(0, lambda: self.lbl_image_preview.configure(image=preview_img, text=""))
+        
+        self.after(0, lambda: self.lbl_content_status.configure(text="DONE", text_color=COLOR_SUCCESS))
+        self.tts.speak("Content generated")
+
+    def save_generated_content(self):
+        text = self.txt_content_out.get("0.0", "end").strip()
+        topic = self.entry_topic.get()
+        
+        if not text: return
+        
+        folder = self.content_gen.save_assets(text, self.current_generated_image, topic)
+        self.lbl_content_status.configure(text=f"SAVED TO {folder}", text_color=COLOR_SUCCESS)
+        self.tts.speak("Assets saved")
+
+    def _setup_data_tab(self):
+        parent = self.tab_data
+        parent.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(parent, text="DATA EXTRACTION LAB", font=("Consolas", 18, "bold"), text_color="gray").pack(pady=20)
+        
+        # Config Frame
+        frame_cfg = ctk.CTkFrame(parent, fg_color=COLOR_PANEL)
+        frame_cfg.pack(fill="x", padx=20, pady=10)
+        
+        ctk.CTkLabel(frame_cfg, text="TARGET URL", font=("Consolas", 12)).pack(anchor="w", padx=10, pady=(10,0))
+        self.entry_scrape_url = ctk.CTkEntry(frame_cfg, placeholder_text="https://example.com/products")
+        self.entry_scrape_url.pack(fill="x", padx=10, pady=(0,10))
+        
+        ctk.CTkLabel(frame_cfg, text="ITEM CONTAINER SELECTOR", font=("Consolas", 12)).pack(anchor="w", padx=10)
+        self.entry_scrape_container = ctk.CTkEntry(frame_cfg, placeholder_text="e.g. .product-card")
+        self.entry_scrape_container.pack(fill="x", padx=10, pady=(0,10))
+        
+        ctk.CTkLabel(frame_cfg, text="FIELDS (Format: Name=.selector, Price=.price)", font=("Consolas", 12)).pack(anchor="w", padx=10)
+        self.entry_scrape_fields = ctk.CTkTextbox(frame_cfg, height=100)
+        self.entry_scrape_fields.pack(fill="x", padx=10, pady=(0,10))
+        self.entry_scrape_fields.insert("0.0", "Name=h2\nPrice=.price\nLink=a")
+        
+        btn_scrape = ctk.CTkButton(frame_cfg, text="INITIATE SCRAPE", command=self.start_scraping, fg_color=COLOR_ACCENT, text_color="black")
+        btn_scrape.pack(fill="x", padx=10, pady=10)
+        
+        self.lbl_scrape_status = ctk.CTkLabel(parent, text="READY", font=("Consolas", 12))
+        self.lbl_scrape_status.pack(pady=10)
+
     # --- Settings Logic ---
     def test_and_save_api(self):
         key = self.entry_settings_api.get().strip()
@@ -258,11 +493,25 @@ class App(ctk.CTk):
         
         try:
             self.llm.configure_ollama(model)
-            self.cfg.set("llm_provider", "ollama")
-            self.cfg.set("ollama_model", model)
-            self.use_ai = True
-            self.lbl_model.configure(text=f"CURRENT: OLLAMA ({model})")
-            self.log(f"SETTINGS: OLLAMA CONFIGURED ({model})")
+            
+            # Test connection
+            self.lbl_model.configure(text=f"TESTING OLLAMA CONNECTION...", text_color="yellow")
+            self.update() # Force UI update
+            
+            success, msg = self.llm.test_connection()
+            
+            if success:
+                self.cfg.set("llm_provider", "ollama")
+                self.cfg.set("ollama_model", model)
+                self.use_ai = True
+                self.lbl_model.configure(text=f"CURRENT: OLLAMA ({model}) - ONLINE", text_color=COLOR_SUCCESS)
+                self.log(f"SETTINGS: OLLAMA CONNECTED ({model})")
+                self.tts.speak("Ollama Connected")
+            else:
+                self.lbl_model.configure(text=f"ERROR: {msg}", text_color=COLOR_ERROR)
+                self.log(f"SETTINGS: OLLAMA ERROR - {msg}")
+                self.tts.speak("Ollama Connection Failed")
+                
         except Exception as e:
             self.log(f"ERROR: Failed to configure Ollama - {str(e)}")
 
@@ -271,6 +520,15 @@ class App(ctk.CTk):
     def log(self, message):
         self.log_textbox.insert("end", f">> {message}\n")
         self.log_textbox.see("end")
+        # Speak important messages
+        if "ERROR" in message:
+            self.tts.speak("Error detected")
+        elif "COMPLETE" in message or "SUCCESS" in message or "ACHIEVED" in message:
+            self.tts.speak("Operation complete")
+        elif "INITIALIZED" in message:
+            pass # Already spoke
+        elif "ONLINE" in message:
+            self.tts.speak("System Online")
 
     def update_log_from_thread(self, message, color=None):
         """Thread-safe log update with optional color."""
@@ -331,7 +589,8 @@ class App(ctk.CTk):
             self.process_command(text)
 
     def process_ai_command(self, text):
-        self.log("ANALYZING INTENT via GEMINI (VISION ACTIVE)...")
+        provider_name = self.llm.get_provider_name().upper()
+        self.log(f"ANALYZING INTENT via {provider_name} (VISION ACTIVE)...")
         # Capture screenshot first (sync or async?)
         # Since we are in main thread callback, we need to schedule async capture, or do it in the thread?
         # Browser access should be thread-safe(ish) or done via loop.
@@ -343,14 +602,22 @@ class App(ctk.CTk):
         mode = self.option_mode.get()
         
         # 1. Capture Screen
+        self.update_log_from_thread("CAPTURING SCREENSHOT...")
         screenshot = await self.agent.get_screenshot_bytes()
+        if screenshot:
+            self.update_log_from_thread(f"SCREENSHOT CAPTURED ({len(screenshot)} bytes).")
+        else:
+            self.update_log_from_thread("NO SCREENSHOT (Browser not active?). SENDING TEXT ONLY.")
         
         # 2. Call API (in thread executor to not block loop?)
+        self.update_log_from_thread(f"SENDING REQUEST TO {self.llm.get_provider_name().upper()}...")
+        
         # Multimodal upload might be slow.
         # We can run sync blocking call in a thread executor provided by asyncio
         loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(None, self.llm.interpret_command, text, screenshot, mode)
         
+        self.update_log_from_thread(f"AI RESPONSE RECEIVED.")
         self.update_log_from_thread(f"AI PLAN ({mode}): {response}")
         
         # 3. Execute Action Sequence
@@ -621,7 +888,79 @@ class App(ctk.CTk):
             self.autopilot_active = False
             self.after(0, lambda: self.btn_stop_autopilot.pack_forget())
 
+    # --- Scheduler Logic ---
+    def _scheduler_loop(self):
+        while self.scheduler_running:
+            schedule.run_pending()
+            time.sleep(1)
+
+    def add_scheduled_task(self):
+        t_time = self.entry_sched_time.get()
+        t_type = self.option_sched_type.get()
+        t_target = self.entry_sched_target.get()
+        
+        if not t_time or not t_target:
+            return
+            
+        schedule.every().day.at(t_time).do(self._execute_scheduled, t_type, t_target)
+        
+        # Add to UI
+        lbl = ctk.CTkLabel(self.sched_list_frame, text=f"[{t_time}] {t_type}: {t_target}", anchor="w")
+        lbl.pack(fill="x", padx=5, pady=2)
+        
+        self.log(f"SCHEDULED: {t_type} at {t_time}")
+        self.tts.speak("Task scheduled")
+
+    def _execute_scheduled(self, t_type, t_target):
+        self.log(f"EXECUTING SCHEDULED TASK: {t_type} - {t_target}")
+        self.tts.speak("Executing scheduled task")
+        if t_type == "REPLAY":
+            self.run_async(self._replay_task(t_target))
+        elif t_type == "AUTO-PILOT":
+            self.run_async(self._autopilot_loop(t_target))
+
+    # --- Scraper Logic ---
+    def start_scraping(self):
+        url = self.entry_scrape_url.get()
+        container = self.entry_scrape_container.get()
+        fields_raw = self.entry_scrape_fields.get("0.0", "end").strip()
+        
+        if not url or not container or not fields_raw:
+            self.lbl_scrape_status.configure(text="ERROR: MISSING FIELDS", text_color=COLOR_ERROR)
+            return
+            
+        # Parse fields
+        fields = {}
+        for line in fields_raw.split("\n"):
+            if "=" in line:
+                k, v = line.split("=", 1)
+                fields[k.strip()] = v.strip()
+        
+        self.lbl_scrape_status.configure(text="SCRAPING...", text_color="white")
+        self.run_async(self._scrape_task(url, container, fields))
+
+    async def _scrape_task(self, url, container, fields):
+        try:
+            await self.agent.navigate(url)
+            data = await self.agent.scrape_data(container, fields)
+            
+            # Save to CSV
+            if data:
+                df = pd.DataFrame(data)
+                filename = f"scraped_data_{int(time.time())}.csv"
+                df.to_csv(filename, index=False)
+                self.update_log_from_thread(f"SCRAPE SUCCESS: Saved {len(data)} items to {filename}")
+                self.tts.speak(f"Scraping complete. {len(data)} items saved.")
+            else:
+                self.update_log_from_thread("SCRAPE: NO DATA FOUND")
+                self.tts.speak("No data found")
+                
+        except Exception as e:
+            self.update_log_from_thread(f"SCRAPE ERROR: {e}")
+
     def on_closing(self):
+        self.scheduler_running = False
+        self.tts.stop()
         self.run_async(self.agent.close())
         self.destroy()
         sys.exit()

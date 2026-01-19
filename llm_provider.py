@@ -167,7 +167,9 @@ class OllamaProvider(LLMProvider):
         }
         
         try:
-            response = requests.post(url, json=payload, timeout=120)
+            print(f"DEBUG: Sending request to Ollama... (Model: {self.model_name})")
+            response = requests.post(url, json=payload, timeout=600)
+            print(f"DEBUG: Ollama response status: {response.status_code}")
             response.raise_for_status()
             result = response.json()
             # Extract message content from chat response
@@ -195,7 +197,22 @@ class OllamaProvider(LLMProvider):
         image_base64 = None
         if screenshot_bytes:
             import base64
-            image_base64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+            from PIL import Image
+            import io
+            
+            # Resize image for performance
+            try:
+                img = Image.open(io.BytesIO(screenshot_bytes))
+                img.thumbnail((1024, 1024)) # Resize to max 1024x1024, preserving aspect ratio
+                
+                # Convert back to bytes
+                buffered = io.BytesIO()
+                img.save(buffered, format="JPEG", quality=70)
+                image_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                print(f"DEBUG: Image resized to {img.size}")
+            except Exception as e:
+                print(f"DEBUG: Image resize failed: {e}")
+                image_base64 = base64.b64encode(screenshot_bytes).decode('utf-8')
         
         response_text = self._call_ollama(prompt, image_base64)
         
@@ -243,6 +260,21 @@ class OllamaProvider(LLMProvider):
         except json.JSONDecodeError:
             return {"error": f"Invalid JSON from Ollama: {response_text}"}
 
+    def test_connection(self):
+        """Test connection to Ollama server"""
+        import requests
+        try:
+            # Try to list tags (models) to verify connection
+            response = requests.get(f"{self.base_url}/api/tags", timeout=5)
+            if response.status_code == 200:
+                return True, "Connection Successful"
+            else:
+                return False, f"Server returned status {response.status_code}"
+        except requests.exceptions.ConnectionError:
+            return False, "Connection Refused. Is Ollama running?"
+        except Exception as e:
+            return False, f"Error: {str(e)}"
+
 
 class LLMClient:
     """Unified LLM client that can use different providers"""
@@ -282,3 +314,14 @@ class LLMClient:
     def get_provider_name(self):
         """Get the name of the current provider"""
         return self.provider_type
+
+    def test_connection(self):
+        """Test connection for the current provider"""
+        if not self.provider:
+            return False, "No provider configured"
+        
+        if hasattr(self.provider, "test_connection"):
+            return self.provider.test_connection()
+        
+        # Fallback for providers without explicit test (like Gemini where we just try generation)
+        return True, "Connection assumed OK (No test method)"
