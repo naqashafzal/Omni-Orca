@@ -63,7 +63,7 @@ class BrowserAgent:
             return None
 
     async def click(self, selector):
-        """Clicks an element and records the action."""
+        """Clicks an element and records the action. Handles iframes."""
         if not self.page:
             raise Exception("Browser not started.")
             
@@ -71,7 +71,23 @@ class BrowserAgent:
         self.record_action("click", {"selector": selector})
         
         print(f"Clicking {selector}...")
-        await self.page.click(selector)
+        
+        # Check frames first (common for reCAPTCHA)
+        target_frame = None
+        for frame in self.page.frames:
+            try:
+                if await frame.query_selector(selector):
+                    target_frame = frame
+                    break
+            except:
+                continue
+        
+        if target_frame:
+            print(f"Found {selector} in frame {target_frame.name or 'unknown'}")
+            await target_frame.click(selector)
+        else:
+            # Fallback to main page (will wait if not found)
+            await self.page.click(selector)
 
     async def type(self, selector, text):
         """Types text into an element and records the action."""
@@ -82,7 +98,22 @@ class BrowserAgent:
         self.record_action("type", {"selector": selector, "text": text})
 
         print(f"Typing '{text}' into {selector}...")
-        await self.page.fill(selector, text)
+        
+        # Check frames first
+        target_frame = None
+        for frame in self.page.frames:
+            try:
+                if await frame.query_selector(selector):
+                    target_frame = frame
+                    break
+            except:
+                continue
+                
+        if target_frame:
+            print(f"Found {selector} in frame {target_frame.name or 'unknown'}")
+            await target_frame.fill(selector, text)
+        else:
+            await self.page.fill(selector, text)
 
     async def mouse_click(self, x, y, button="left", click_count=1):
         """Click at specific coordinates"""

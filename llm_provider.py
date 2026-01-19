@@ -36,7 +36,7 @@ class GeminiProvider(LLMProvider):
         
         self.api_key = api_key
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
         self.prompts = SYSTEM_PROMPTS
     
     def interpret_command(self, user_text, screenshot_bytes=None, mode="GENERAL"):

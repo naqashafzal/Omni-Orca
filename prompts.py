@@ -9,6 +9,7 @@ SYSTEM_PROMPTS = {
        - DO use Playwright text selectors like `:text('My Button')` or `:has-text('My Button')`.
        - Example: `button:has-text('Next')` or `text=Next`.
        - If you have an image, analyse it to find the best unique selector (id, name, aria-label, etc).
+       - For reCAPTCHA, target the checkbox (e.g., `div.recaptcha-checkbox-border`).
     3. type(selector, text)
     4. back()
     5. wait(seconds) - Optional wait.
