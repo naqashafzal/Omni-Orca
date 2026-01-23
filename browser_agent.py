@@ -17,19 +17,24 @@ class BrowserAgent:
 
     async def start(self):
         """Starts the browser session."""
+        import os
+        
+        # Create persistent browser profile directory
+        user_data_dir = os.path.join(os.getcwd(), "browser_profile")
+        os.makedirs(user_data_dir, exist_ok=True)
+        
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(
+        self.browser = await self.playwright.chromium.launch_persistent_context(
+            user_data_dir,
             headless=self.headless,
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-infobars"
-            ]
-        )
-        context = await self.browser.new_context(
+            ],
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
-        self.page = await context.new_page()
+        self.page = self.browser.pages[0] if self.browser.pages else await self.browser.new_page()
         
         # Stealth scripts
         await self.page.add_init_script("""
@@ -496,4 +501,6 @@ class BrowserAgent:
             await self.browser.close()
         if self.playwright:
             await self.playwright.stop()
+        self.browser = None
+        self.page = None
         print("Browser closed.")

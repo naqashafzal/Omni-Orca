@@ -11,3 +11,5 @@ pyttsx3
 schedule
 pandas
 cryptography
+python-binance
+numpy
