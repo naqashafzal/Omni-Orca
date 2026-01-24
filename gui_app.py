@@ -543,8 +543,17 @@ class App(ctk.CTk):
             self.tts.speak("Operation complete")
         elif "INITIALIZED" in message:
             pass # Already spoke
-        elif "ONLINE" in message:
-            self.tts.speak("System Online")
+    
+    def crypto_log(self, msg):
+        """Log messages to crypto trader tab"""
+        try:
+            self.crypto_log_display.configure(state="normal")
+            self.crypto_log_display.insert("end", f">> {msg}\n")
+            self.crypto_log_display.see("end")
+            self.crypto_log_display.configure(state="disabled")
+        except:
+            # Fallback to main log if crypto log not available yet
+            self.log(msg)
 
     def update_log_from_thread(self, message, color=None):
         """Thread-safe log update with optional color."""
@@ -1089,6 +1098,17 @@ class App(ctk.CTk):
         self.trade_history_display.insert("0.0", "No trades yet")
         self.trade_history_display.configure(state="disabled")
         
+        # Trading Log (NEW)
+        log_frame = ctk.CTkFrame(frame_dashboard, fg_color=COLOR_PANEL)
+        log_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        ctk.CTkLabel(log_frame, text="TRADING LOG", font=("Consolas", 14, "bold"), text_color=COLOR_ACCENT).pack(pady=10)
+        
+        self.crypto_log_display = ctk.CTkTextbox(log_frame, font=("Consolas", 9), height=200)
+        self.crypto_log_display.pack(fill="both", expand=True, padx=10, pady=(0,10))
+        self.crypto_log_display.insert("0.0", "Trading log will appear here...")
+        self.crypto_log_display.configure(state="disabled")
+        
         # Initialize strategy
         self.on_strategy_change("RSI")
 
@@ -1181,8 +1201,13 @@ class App(ctk.CTk):
         self.trading_active = False
         self.btn_start_trading.configure(state="normal")
         self.btn_stop_trading.configure(state="disabled")
-        self.check_paper.configure(state="normal")
-        self.log("CRYPTO TRADER: Trading stopped")
+        self.option_trading_mode.configure(state="normal")
+        
+        # Re-enable exchange selector if in browser mode
+        if self.trading_mode_var.get() == "Browser":
+            self.option_exchange.configure(state="normal")
+        
+        self.crypto_log("CRYPTO TRADER: Trading stopped")
         self.tts.speak("Trading stopped")
 
     def emergency_stop(self):
@@ -1199,9 +1224,12 @@ class App(ctk.CTk):
         
         self.btn_start_trading.configure(state="normal")
         self.btn_stop_trading.configure(state="disabled")
-        self.check_paper.configure(state="normal")
+        self.option_trading_mode.configure(state="normal")
         
-        self.log("🚨 EMERGENCY STOP ACTIVATED - ALL POSITIONS CLOSED")
+        if self.trading_mode_var.get() == "Browser":
+            self.option_exchange.configure(state="normal")
+        
+        self.crypto_log("🚨 EMERGENCY STOP ACTIVATED - ALL POSITIONS CLOSED")
         self.tts.speak("Emergency stop activated")
         self.update_trading_dashboard()
 
@@ -1249,7 +1277,7 @@ class App(ctk.CTk):
                 
                 if signal:
                     if signal.action in ["BUY", "SELL"]:
-                        self.after(0, lambda s=signal: self.log(f"🎯 SIGNAL: {s.action} {s.symbol} @ ${s.price:,.2f} - {s.reason}"))
+                        self.after(0, lambda s=signal: self.crypto_log(f"🎯 SIGNAL: {s.action} {s.symbol} @ ${s.price:,.2f} - {s.reason}"))
                         
                         # Check if we should execute
                         if signal.action == "BUY" and self.current_symbol not in self.portfolio.positions:
@@ -1257,7 +1285,7 @@ class App(ctk.CTk):
                         elif signal.action == "SELL" and self.current_symbol in self.portfolio.positions:
                             self._execute_sell(signal)
                     elif iteration % 5 == 0:  # Log HOLD signals occasionally
-                        self.after(0, lambda s=signal: self.log(f"⏸️ {s.reason}"))
+                        self.after(0, lambda s=signal: self.crypto_log(f"⏸️ {s.reason}"))
                 else:
                     if iteration == 1:
                         self.after(0, lambda: self.log(f"⚠️ No signal generated - strategy may need more data"))
@@ -1293,7 +1321,7 @@ class App(ctk.CTk):
         valid, reason = self.risk_manager.validate_trade(signal.symbol, "BUY", quantity, signal.price, current_prices)
         
         if not valid:
-            self.after(0, lambda r=reason: self.log(f"TRADE REJECTED: {r}"))
+            self.after(0, lambda r=reason: self.crypto_log(f"TRADE REJECTED: {r}"))
             return
         
         # Execute order
@@ -1318,7 +1346,7 @@ class App(ctk.CTk):
             self.after(0, lambda: self.log(f"BUY EXECUTED: {quantity:.4f} {signal.symbol} @ ${signal.price:.2f}"))
             self.after(0, lambda: self.tts.speak("Buy order executed"))
         else:
-            self.after(0, lambda m=msg: self.log(f"BUY FAILED: {m}"))
+            self.after(0, lambda m=msg: self.crypto_log(f"BUY FAILED: {m}"))
 
     def _execute_sell(self, signal):
         """Execute sell order"""
@@ -1336,7 +1364,7 @@ class App(ctk.CTk):
                 self.after(0, lambda: self.log(f"SELL EXECUTED: {trade.quantity:.4f} {signal.symbol} @ ${signal.price:.2f} | P&L: ${trade.pnl:.2f} ({trade.pnl_percent:.2f}%)"))
                 self.after(0, lambda: self.tts.speak(f"Sell order executed. {pnl_msg}"))
         else:
-            self.after(0, lambda m=msg: self.log(f"SELL FAILED: {m}"))
+            self.after(0, lambda m=msg: self.crypto_log(f"SELL FAILED: {m}"))
 
     def _close_position(self, symbol, price, reason):
         """Close position (stop loss or take profit)"""
