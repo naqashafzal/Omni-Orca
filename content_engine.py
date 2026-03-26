@@ -8,25 +8,33 @@ class ContentGenerator:
     def __init__(self, llm_client):
         self.llm = llm_client
 
-    def generate_text(self, topic, platform):
+    def generate_text(self, topic, platform, vibe="Professional"):
         """
-        Generate a social media post using the configured LLM.
+        Generate a social media post using the configured LLM with specific vibe and hook optimization.
         """
         if not self.llm.is_configured():
             return "Error: AI not configured. Please set up API key or Ollama first."
 
         prompt = f"""
-        You are a social media expert. Write a viral, engaging post for {platform} about: "{topic}".
+        You are a social media expert specializing in "{vibe}" content.
         
-        Guidelines:
-        - Use appropriate emojis.
-        - Include 3-5 relevant hashtags.
-        - Keep it concise and punchy.
-        - For Twitter: under 280 chars.
-        - For LinkedIn: professional but engaging.
-        - For Instagram: visual description + caption.
+        Topic/Context:
+        {topic}
         
-        Return ONLY the post text.
+        Task:
+        1. Generate 3 "Scroll-Stopping Hooks" (first lines).
+        2. Select the best one.
+        3. Write the full post using that hook.
+        
+        Guidelines for "{vibe}" Vibe:
+        - If "Professional": Clean, insightful, authority-building.
+        - If "Shitposting": Chaotic, meme-heavy, lowercase, slang.
+        - If "Storyteller": "I learned X...", narrative arc, emotional.
+        - If "Sales": Urgency, benefit-driven, clear CTA.
+        
+        Platform: {platform}
+        
+        Return ONLY the final post text (including hashtags).
         """
         
         # We reuse the interpret_command method for simplicity, or we could add a raw generate method
@@ -51,12 +59,37 @@ class ContentGenerator:
         except Exception as e:
             return f"Generation Error: {e}"
 
-    def generate_image(self, topic):
+    def generate_image(self, topic, post_content=None):
         """
-        Generate an image using Pollinations.ai (No API key required).
+        Generate an image using Pollinations.ai.
+        If post_content is provided, uses LLM to generate a specific visual description.
         """
-        # 1. Refine prompt for image generation
-        image_prompt = f"high quality, futuristic, cinematic, 8k render, {topic}"
+        # 1. Refine prompt
+        if post_content and self.llm.is_configured():
+            prompt_gen_prompt = f"""
+            Create a detailed visual description for an image to accompany this social media post.
+            
+            Post Content:
+            "{post_content[:500]}..."
+            
+            Topic: {topic}
+            
+            The description should be for an AI image generator (Midjourney/Stable Diffusion style).
+            Include lighting, style (cinematic, digital art), and subject.
+            Keep it under 40 words.
+            Return ONLY the prompt.
+            """
+            try:
+                image_prompt = self.llm.interpret_command(prompt_gen_prompt, mode="GENERAL")
+                if isinstance(image_prompt, dict): image_prompt = str(image_prompt)
+                # Clean up if it returns JSON or quotes
+                image_prompt = image_prompt.replace('"', '').replace("'", "").strip()
+            except:
+                image_prompt = f"high quality, futuristic, cinematic, 8k render, {topic}"
+        else:
+            image_prompt = f"high quality, futuristic, cinematic, 8k render, {topic}"
+            
+        print(f"Generated Image Prompt: {image_prompt}")
         
         # 2. Call Pollinations
         encoded_prompt = requests.utils.quote(image_prompt)

@@ -18,6 +18,7 @@ from trading_strategies import STRATEGIES
 from risk_manager import RiskManager, Portfolio, Position
 from exchange_client import ExchangeClient
 from browser_trading_client import BrowserTradingClient, HybridTradingClient
+from social_media_manager import SocialMediaManager
 
 
 # --- Theme Configuration ---
@@ -57,7 +58,9 @@ class App(ctk.CTk):
             self.voice_available = False
 
         self.llm = LLMClient()
+        self.llm = LLMClient()
         self.content_gen = ContentGenerator(self.llm)
+        self.social_manager = SocialMediaManager(self.agent, self.content_gen, self.llm)
         self.tts = TTSEngine()
         self.tts.speak("System Initialized")
         
@@ -78,6 +81,12 @@ class App(ctk.CTk):
             ollama_model = self.cfg.get("ollama_model") or "llava:latest"
             self.llm.configure_ollama(ollama_model)
             self.use_ai = True
+        elif saved_provider == "openrouter":
+            or_key = self.cfg.get("openrouter_key")
+            or_model = self.cfg.get("openrouter_model") or "google/gemini-2.0-flash-001"
+            if or_key:
+                self.llm.configure_openrouter(or_key, or_model)
+                self.use_ai = True
 
         self.is_listening = False
         self.autopilot_active = False
@@ -91,7 +100,7 @@ class App(ctk.CTk):
         self.tab_cmd = self.tab_view.add("COMMAND CENTER")
         self.tab_scheduler = self.tab_view.add("SCHEDULER")
         self.tab_accounts = self.tab_view.add("ACCOUNTS")
-        self.tab_content = self.tab_view.add("CONTENT STUDIO")
+        self.tab_social = self.tab_view.add("SOCIAL MEDIA PRO")
         self.tab_data = self.tab_view.add("DATA LAB")
         self.tab_crypto = self.tab_view.add("CRYPTO TRADER")
         self.tab_settings = self.tab_view.add("SYSTEM SETTINGS")
@@ -107,7 +116,7 @@ class App(ctk.CTk):
         self._setup_command_tab()
         self._setup_scheduler_tab()
         self._setup_accounts_tab()
-        self._setup_content_tab()
+        self._setup_social_tab()
         self._setup_data_tab()
         self._setup_crypto_tab()
         self._setup_settings_tab()
@@ -228,6 +237,9 @@ class App(ctk.CTk):
         
         self.radio_ollama = ctk.CTkRadioButton(provider_frame, text="Ollama (Local)", variable=self.provider_var, value="ollama", command=self.on_provider_change)
         self.radio_ollama.pack(side="left", padx=10)
+
+        self.radio_openrouter = ctk.CTkRadioButton(provider_frame, text="OpenRouter (Cloud)", variable=self.provider_var, value="openrouter", command=self.on_provider_change)
+        self.radio_openrouter.pack(side="left", padx=10)
         
         # Ollama configuration
         self.frame_ollama = ctk.CTkFrame(self.frame_model, fg_color="transparent")
@@ -241,6 +253,29 @@ class App(ctk.CTk):
         
         self.btn_save_ollama = ctk.CTkButton(self.frame_ollama, text="SAVE & CONNECT", command=self.save_ollama_config, width=120, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black")
         self.btn_save_ollama.pack(side="left", padx=5)
+
+        # OpenRouter configuration
+        self.frame_openrouter = ctk.CTkFrame(self.frame_model, fg_color="transparent")
+        self.frame_openrouter.pack(anchor="w", padx=20, pady=10, fill="x")
+
+        ctk.CTkLabel(self.frame_openrouter, text="API Key:", font=("Consolas", 10)).pack(side="left", padx=5)
+        self.openrouter_key_entry = ctk.CTkEntry(self.frame_openrouter, width=260, placeholder_text="sk-or-...", show="*")
+        self.openrouter_key_entry.pack(side="left", padx=5)
+        if self.cfg.get("openrouter_key"):
+            self.openrouter_key_entry.insert(0, self.cfg.get("openrouter_key"))
+
+        ctk.CTkLabel(self.frame_openrouter, text="Model:", font=("Consolas", 10)).pack(side="left", padx=(10, 5))
+        self.openrouter_model_entry = ctk.CTkEntry(self.frame_openrouter, width=220, placeholder_text="google/gemini-2.0-flash-001")
+        self.openrouter_model_entry.pack(side="left", padx=5)
+        if self.cfg.get("openrouter_model"):
+            self.openrouter_model_entry.insert(0, self.cfg.get("openrouter_model"))
+
+        self.btn_save_openrouter = ctk.CTkButton(
+            self.frame_openrouter, text="SAVE & CONNECT",
+            command=self.save_openrouter_config, width=130,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black"
+        )
+        self.btn_save_openrouter.pack(side="left", padx=5)
         
         # Show/hide based on selection
         self.on_provider_change()
@@ -356,82 +391,408 @@ class App(ctk.CTk):
             self.update_log_from_thread(f"LOGIN ERROR: {e}")
             self.tts.speak("Login failed")
 
-    def _setup_content_tab(self):
-        parent = self.tab_content
+
+
+    def _setup_social_tab(self):
+        parent = self.tab_social
         parent.grid_columnconfigure(1, weight=1)
         parent.grid_rowconfigure(0, weight=1)
 
-        # Left: Controls
-        frame_controls = ctk.CTkFrame(parent, width=300, fg_color=COLOR_PANEL)
-        frame_controls.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        
-        ctk.CTkLabel(frame_controls, text="CREATIVE SUITE", font=("Consolas", 16, "bold")).pack(pady=20)
-        
-        self.entry_topic = ctk.CTkEntry(frame_controls, placeholder_text="Enter Topic (e.g. Future of AI)", width=250)
-        self.entry_topic.pack(pady=10)
-        
-        self.option_content_platform = ctk.CTkOptionMenu(frame_controls, values=["Twitter", "LinkedIn", "Instagram", "Facebook"])
-        self.option_content_platform.pack(pady=10)
-        
-        btn_gen = ctk.CTkButton(frame_controls, text="✨ GENERATE MAGIC", command=self.generate_content, fg_color=COLOR_ACCENT, text_color="black")
-        btn_gen.pack(pady=20)
-        
-        btn_save_content = ctk.CTkButton(frame_controls, text="SAVE ASSETS", command=self.save_generated_content, fg_color=COLOR_SUCCESS, text_color="black")
-        btn_save_content.pack(pady=10)
-        
-        self.lbl_content_status = ctk.CTkLabel(frame_controls, text="", font=("Consolas", 11))
-        self.lbl_content_status.pack(pady=10)
+        # Left Panel: Research & Config
+        frame_left = ctk.CTkFrame(parent, width=350, fg_color=COLOR_PANEL)
+        frame_left.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        frame_left.grid_propagate(False)
 
-        # Right: Preview
-        frame_preview = ctk.CTkScrollableFrame(parent, fg_color="transparent", label_text="PREVIEW")
-        frame_preview.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-        
-        self.txt_content_out = ctk.CTkTextbox(frame_preview, height=150, font=("Consolas", 12))
-        self.txt_content_out.pack(fill="x", padx=10, pady=10)
-        
-        self.lbl_image_preview = ctk.CTkLabel(frame_preview, text="[IMAGE PREVIEW]", height=300, fg_color="#222")
-        self.lbl_image_preview.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        self.current_generated_image = None
+        ctk.CTkLabel(frame_left, text="SOCIAL MEDIA PRO", font=("Consolas", 16, "bold"), text_color=COLOR_ACCENT).pack(pady=20)
 
-    def generate_content(self):
-        topic = self.entry_topic.get()
-        platform = self.option_content_platform.get()
+        # Topic Input
+        ctk.CTkLabel(frame_left, text="TOPIC / TREND", font=("Consolas", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 5))
+        self.entry_social_topic = ctk.CTkEntry(frame_left, placeholder_text="e.g. AI Agents")
+        self.entry_social_topic.pack(fill="x", padx=10, pady=5)
+
+        # Research Button
+        self.btn_research = ctk.CTkButton(frame_left, text="🔍 RESEARCH TRENDS", command=self.research_trends, fg_color=COLOR_ACCENT, text_color="black")
+        self.btn_research.pack(fill="x", padx=10, pady=10)
+
+        # Trends Display
+        ctk.CTkLabel(frame_left, text="TREND INSIGHTS", font=("Consolas", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 5))
+        self.txt_trends = ctk.CTkTextbox(frame_left, height=150, font=("Consolas", 11))
+        self.txt_trends.pack(fill="x", padx=10, pady=5)
+
+        # Vibe Selector
+        ctk.CTkLabel(frame_left, text="CONTENT VIBE", font=("Consolas", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 5))
+        self.option_vibe = ctk.CTkOptionMenu(frame_left, values=["Professional", "Shitposting", "Storyteller", "Sales"])
+        self.option_vibe.pack(fill="x", padx=10, pady=5)
+
+        # Generate Button
+        self.btn_gen_social = ctk.CTkButton(frame_left, text="✨ GENERATE POST", command=self.generate_social_post, fg_color=COLOR_SUCCESS, text_color="black")
+        self.btn_gen_social.pack(fill="x", padx=10, pady=20)
+
+        # Right Panel: Preview & Post
+        frame_right = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_right.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        
+        # Preview
+        ctk.CTkLabel(frame_right, text="CONTENT PREVIEW", font=("Consolas", 14, "bold")).pack(anchor="w", pady=(10, 5))
+        self.txt_social_preview = ctk.CTkTextbox(frame_right, height=150, font=("Consolas", 12))
+        self.txt_social_preview.pack(fill="x", pady=5)
+        
+        self.lbl_social_image = ctk.CTkLabel(frame_right, text="[IMAGE PREVIEW]", height=250, fg_color="#222")
+        self.lbl_social_image.pack(fill="both", expand=True, pady=10)
+        
+        # Posting Controls
+        frame_post = ctk.CTkFrame(frame_right, fg_color=COLOR_PANEL)
+        frame_post.pack(fill="x", pady=10)
+        
+        ctk.CTkLabel(frame_post, text="PUBLISH TO", font=("Consolas", 12, "bold")).pack(side="left", padx=10)
+        
+        self.btn_post_twitter = ctk.CTkButton(frame_post, text="TWITTER / X", command=lambda: self.post_social("twitter"), width=120, fg_color="#1DA1F2")
+        self.btn_post_twitter.pack(side="left", padx=5, pady=10)
+        
+        self.btn_post_linkedin = ctk.CTkButton(frame_post, text="LINKEDIN", command=lambda: self.post_social("linkedin"), width=120, fg_color="#0077b5")
+        self.btn_post_linkedin.pack(side="left", padx=5, pady=10)
+
+        self.lbl_social_status = ctk.CTkLabel(frame_right, text="", font=("Consolas", 11))
+        self.lbl_social_status.pack(pady=5)
+
+        self.current_social_content = None
+
+        # --- AUTO COMMENT BOT SECTION ---
+        # Placed at the bottom of the right panel, spanning full width
+        frame_comment = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10, border_color="#333", border_width=1)
+        frame_comment.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
+
+        ctk.CTkLabel(
+            frame_comment,
+            text="⚡  AUTO COMMENT BOT",
+            font=("Consolas", 14, "bold"),
+            text_color=COLOR_ACCENT
+        ).pack(anchor="w", padx=15, pady=(12, 4))
+
+        # Row 1: URL + Platform
+        row1 = ctk.CTkFrame(frame_comment, fg_color="transparent")
+        row1.pack(fill="x", padx=15, pady=4)
+        row1.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(row1, text="DIRECT URL (Single):", font=("Consolas", 11), text_color="gray").grid(row=0, column=0, sticky="w")
+        self.entry_comment_url = ctk.CTkEntry(
+            row1,
+            placeholder_text="Paste a specific tweet/post URL for a single comment",
+            font=("Consolas", 12),
+            fg_color="#000",
+            border_color="#333",
+            text_color="white"
+        )
+        self.entry_comment_url.grid(row=1, column=0, sticky="ew", padx=(0, 10), pady=(0, 4))
+
+        ctk.CTkLabel(row1, text="PLATFORM:", font=("Consolas", 11), text_color="gray").grid(row=0, column=1, sticky="w", padx=(10, 0))
+        self.option_comment_platform = ctk.CTkOptionMenu(
+            row1,
+            values=["Twitter / X", "Facebook"],
+            width=130,
+            fg_color=COLOR_PANEL,
+            button_color=COLOR_ACCENT,
+            button_hover_color=COLOR_ACCENT_HOVER,
+            text_color="white"
+        )
+        self.option_comment_platform.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=(0, 4))
+
+        # Row 2: Advanced Bot Config
+        row2 = ctk.CTkFrame(frame_comment, fg_color="transparent")
+        row2.pack(fill="x", padx=15, pady=4)
+        
+        ctk.CTkLabel(row2, text="OR AUTO-BOT KEYWORDS (Comma separated):", font=("Consolas", 11), text_color="cyan").pack(anchor="w")
+        self.entry_bot_keywords = ctk.CTkEntry(
+            row2,
+            placeholder_text="AI, Crypto, Python, Tech News",
+            font=("Consolas", 12),
+            fg_color="#111",
+            border_color="#444",
+            text_color="white"
+        )
+        self.entry_bot_keywords.pack(fill="x", pady=(0, 8))
+
+        # Row 2b: Limits and Delays
+        row2b = ctk.CTkFrame(row2, fg_color="transparent")
+        row2b.pack(fill="x")
+        
+        ctk.CTkLabel(row2b, text="MAX REPLIES:", font=("Consolas", 10)).pack(side="left", padx=(0, 5))
+        self.entry_bot_max = ctk.CTkEntry(row2b, width=50, placeholder_text="5")
+        self.entry_bot_max.insert(0, "5")
+        self.entry_bot_max.pack(side="left", padx=5)
+
+        ctk.CTkLabel(row2b, text="DELAY RANGE (S):", font=("Consolas", 10)).pack(side="left", padx=(15, 5))
+        self.entry_bot_delay_min = ctk.CTkEntry(row2b, width=50, placeholder_text="30")
+        self.entry_bot_delay_min.insert(0, "30")
+        self.entry_bot_delay_min.pack(side="left", padx=5)
+        ctk.CTkLabel(row2b, text="-").pack(side="left")
+        self.entry_bot_delay_max = ctk.CTkEntry(row2b, width=50, placeholder_text="90")
+        self.entry_bot_delay_max.insert(0, "90")
+        self.entry_bot_delay_max.pack(side="left", padx=5)
+
+        # Row 3: Prompt
+        row3 = ctk.CTkFrame(frame_comment, fg_color="transparent")
+        row3.pack(fill="x", padx=15, pady=4)
+
+        ctk.CTkLabel(row3, text="REPLY STYLE / CONTEXT (AI Intent):", font=("Consolas", 11), text_color="gray").pack(anchor="w")
+        self.entry_comment_prompt = ctk.CTkEntry(
+            row3,
+            placeholder_text="e.g. Be funny and edgy",
+            font=("Consolas", 12),
+            fg_color="#000",
+            border_color="#333",
+            text_color="white"
+        )
+        self.entry_comment_prompt.pack(fill="x", pady=4)
+
+        # Row 2c: Daily Limit
+        row2c = ctk.CTkFrame(row2, fg_color="transparent")
+        row2c.pack(fill="x", pady=(4, 0))
+        ctk.CTkLabel(row2c, text="DAILY LIMIT:", font=("Consolas", 10)).pack(side="left", padx=(0, 5))
+        self.entry_bot_daily_limit = ctk.CTkEntry(row2c, width=55, placeholder_text="20")
+        self.entry_bot_daily_limit.insert(0, "20")
+        self.entry_bot_daily_limit.pack(side="left", padx=5)
+        self.lbl_bot_replies = ctk.CTkLabel(row2c, text="Replies today: 0", font=("Consolas", 11), text_color="gray")
+        self.lbl_bot_replies.pack(side="left", padx=(20, 0))
+
+        # Row 4: Execute / Stop buttons + status
+        row4 = ctk.CTkFrame(frame_comment, fg_color="transparent")
+        row4.pack(fill="x", padx=15, pady=(4, 6))
+
+        self.btn_auto_comment = ctk.CTkButton(
+            row4,
+            text="🚀 START AUTO-COMMENT BOT",
+            command=self.execute_auto_comment,
+            fg_color=COLOR_ACCENT,
+            hover_color=COLOR_ACCENT_HOVER,
+            text_color="black",
+            font=("Consolas", 12, "bold")
+        )
+        self.btn_auto_comment.pack(side="left", padx=(0, 10))
+
+        self.btn_stop_bot = ctk.CTkButton(
+            row4,
+            text="⛔ STOP",
+            command=self._stop_bot_action,
+            fg_color="#7a0000",
+            hover_color="#cc0000",
+            text_color="white",
+            font=("Consolas", 11, "bold"),
+            width=80,
+            state="disabled"
+        )
+        self.btn_stop_bot.pack(side="left", padx=(0, 15))
+
+        self.lbl_comment_status = ctk.CTkLabel(row4, text="READY", font=("Consolas", 11), text_color="gray")
+        self.lbl_comment_status.pack(side="left")
+
+        # Row 5: Activity Log
+        ctk.CTkLabel(frame_comment, text="BOT ACTIVITY LOG", font=("Consolas", 10), text_color="gray").pack(anchor="w", padx=15)
+        self.txt_bot_log = ctk.CTkTextbox(
+            frame_comment,
+            height=100,
+            font=("Consolas", 10),
+            fg_color="#050505",
+            text_color="#00ff99",
+            state="disabled"
+        )
+        self.txt_bot_log.pack(fill="x", padx=15, pady=(0, 12))
+
+    def research_trends(self):
+        topic = self.entry_social_topic.get()
+        if not topic: return
+        
+        self.lbl_social_status.configure(text="RESEARCHING TRENDS...", text_color="yellow")
+        self.tts.speak("Researching trends")
+        
+        threading.Thread(target=self._research_thread, args=(topic,)).start()
+
+    def _research_thread(self, topic):
+        trends = asyncio.run_coroutine_threadsafe(self.social_manager.research_trends(topic), self.loop).result()
+        
+        self.after(0, lambda: self.txt_trends.delete("0.0", "end"))
+        self.after(0, lambda: self.txt_trends.insert("0.0", trends))
+        self.after(0, lambda: self.lbl_social_status.configure(text="RESEARCH COMPLETE", text_color=COLOR_SUCCESS))
+        self.tts.speak("Research complete")
+
+    def generate_social_post(self):
+        topic = self.entry_social_topic.get()
+        trends = self.txt_trends.get("0.0", "end").strip()
+        vibe = self.option_vibe.get()
         
         if not topic: return
         
-        self.lbl_content_status.configure(text="GENERATING...", text_color="yellow")
-        self.tts.speak("Generating content")
+        self.lbl_social_status.configure(text="GENERATING CONTENT...", text_color="yellow")
+        self.tts.speak("Generating post")
         
-        # Run in thread
-        threading.Thread(target=self._gen_content_thread, args=(topic, platform)).start()
+        threading.Thread(target=self._gen_social_thread, args=(topic, trends, vibe)).start()
 
-    def _gen_content_thread(self, topic, platform):
-        # 1. Text
-        text = self.content_gen.generate_text(topic, platform)
-        self.after(0, lambda: self.txt_content_out.delete("0.0", "end"))
-        self.after(0, lambda: self.txt_content_out.insert("0.0", text))
+    def _gen_social_thread(self, topic, trends, vibe):
+        content = asyncio.run_coroutine_threadsafe(self.social_manager.generate_content_plan(topic, trends, vibe), self.loop).result()
+        self.current_social_content = content
         
-        # 2. Image
-        image = self.content_gen.generate_image(topic)
-        if image:
-            self.current_generated_image = image
-            # Resize for preview
-            preview_img = ctk.CTkImage(light_image=image, dark_image=image, size=(300, 300))
-            self.after(0, lambda: self.lbl_image_preview.configure(image=preview_img, text=""))
+        # Update UI
+        self.after(0, lambda: self.txt_social_preview.delete("0.0", "end"))
+        self.after(0, lambda: self.txt_social_preview.insert("0.0", content["text"]))
         
-        self.after(0, lambda: self.lbl_content_status.configure(text="DONE", text_color=COLOR_SUCCESS))
-        self.tts.speak("Content generated")
+        if content["image"]:
+            preview_img = ctk.CTkImage(light_image=content["image"], dark_image=content["image"], size=(400, 250))
+            self.after(0, lambda: self.lbl_social_image.configure(image=preview_img, text=""))
+            
+        self.after(0, lambda: self.lbl_social_status.configure(text="GENERATION COMPLETE", text_color=COLOR_SUCCESS))
+        self.tts.speak("Post generated")
 
-    def save_generated_content(self):
-        text = self.txt_content_out.get("0.0", "end").strip()
-        topic = self.entry_topic.get()
+    def post_social(self, platform):
+        if not self.current_social_content:
+            self.lbl_social_status.configure(text="ERROR: NO CONTENT GENERATED", text_color=COLOR_ERROR)
+            return
+            
+        self.lbl_social_status.configure(text=f"POSTING TO {platform.upper()}...", text_color="yellow")
+        self.tts.speak(f"Posting to {platform}")
         
-        if not text: return
-        
-        folder = self.content_gen.save_assets(text, self.current_generated_image, topic)
-        self.lbl_content_status.configure(text=f"SAVED TO {folder}", text_color=COLOR_SUCCESS)
-        self.tts.speak("Assets saved")
+        threading.Thread(target=self._post_social_thread, args=(platform,)).start()
+
+    def _post_social_thread(self, platform):
+        if platform == "twitter":
+            result = asyncio.run_coroutine_threadsafe(self.social_manager.post_to_twitter(self.current_social_content), self.loop).result()
+        elif platform == "linkedin":
+            result = asyncio.run_coroutine_threadsafe(self.social_manager.post_to_linkedin(self.current_social_content), self.loop).result()
+        else:
+            result = "Unknown platform"
+            
+        self.after(0, lambda: self.lbl_social_status.configure(text=result, text_color=COLOR_ACCENT))
+        self.tts.speak("Posting task finished")
+
+    # --- Auto Comment Bot ---
+    def _stop_bot_action(self):
+        """Signal the bot loop to stop."""
+        self.social_manager.stop_bot()
+        self.lbl_comment_status.configure(text="STOP REQUESTED...", text_color="orange")
+        self.btn_stop_bot.configure(state="disabled")
+
+    def _bot_log(self, message: str):
+        """Append a message to the bot activity log textbox."""
+        def _append():
+            self.txt_bot_log.configure(state="normal")
+            self.txt_bot_log.insert("end", f"{message}\n")
+            self.txt_bot_log.see("end")
+            self.txt_bot_log.configure(state="disabled")
+        self.after(0, _append)
+
+    def execute_auto_comment(self):
+        post_url = self.entry_comment_url.get().strip()
+        bot_keywords = self.entry_bot_keywords.get().strip()
+        prompt = self.entry_comment_prompt.get().strip()
+        platform = self.option_comment_platform.get()
+        vibe = self.option_vibe.get()
+
+        if bot_keywords:
+            if "Twitter" not in platform:
+                self.lbl_comment_status.configure(text="ERROR: BOT ONLY FOR TWITTER", text_color=COLOR_ERROR)
+                return
+            
+            try:
+                keywords = [k.strip() for k in bot_keywords.split(",") if k.strip()]
+                max_replies = int(self.entry_bot_max.get() or 5)
+                delay_range = (int(self.entry_bot_delay_min.get() or 30), int(self.entry_bot_delay_max.get() or 90))
+            except ValueError:
+                self.lbl_comment_status.configure(text="ERROR: INVALID NUMBERS", text_color=COLOR_ERROR)
+                return
+            
+            self.lbl_comment_status.configure(text="STARTING ADVANCED BOT...", text_color="yellow")
+            self.btn_auto_comment.configure(state="disabled")
+            self.tts.speak("Starting advanced auto comment bot")
+            
+            threading.Thread(
+                target=self._advanced_bot_thread,
+                args=(keywords, max_replies, delay_range, prompt),
+                daemon=True
+            ).start()
+            
+        elif post_url:
+            self.lbl_comment_status.configure(text="GENERATING COMMENT...", text_color="yellow")
+            self.btn_auto_comment.configure(state="disabled")
+            self.tts.speak("Generating and posting comment")
+            threading.Thread(
+                target=self._auto_comment_thread,
+                args=(post_url, prompt, platform, vibe),
+                daemon=True
+            ).start()
+        else:
+            self.lbl_comment_status.configure(text="ERROR: ENTER URL OR KEYWORDS.", text_color=COLOR_ERROR)
+
+    def _advanced_bot_thread(self, keywords, max_replies, delay_range, prompt_context, daily_limit=20):
+        def update_status(msg):
+            self.after(0, lambda m=msg: self.lbl_comment_status.configure(text=m[:60].upper()))
+            self._bot_log(msg)
+            # Update daily counter label
+            count = self.social_manager.get_daily_reply_count()
+            self.after(0, lambda c=count: self.lbl_bot_replies.configure(text=f"Replies today: {c}"))
+
+        try:
+            result = asyncio.run_coroutine_threadsafe(
+                self.social_manager.run_advanced_twitter_bot(
+                    keywords=keywords,
+                    max_replies=max_replies,
+                    delay_range=delay_range,
+                    mode="AI",
+                    prompt_context=prompt_context,
+                    progress_callback=update_status,
+                    daily_limit=daily_limit
+                ),
+                self.loop
+            ).result(timeout=7200)
+
+            self.after(0, lambda r=result: self.lbl_comment_status.configure(text=r[:60].upper(), text_color=COLOR_SUCCESS))
+            self._bot_log(f"--- DONE: {result} ---")
+            self.tts.speak("Advanced bot finished")
+        except Exception as e:
+            self.after(0, lambda err=e: self.lbl_comment_status.configure(
+                text=f"BOT ERROR: {str(err)[:40]}".upper(), text_color=COLOR_ERROR
+            ))
+            self._bot_log(f"ERROR: {e}")
+        finally:
+            self.after(0, lambda: self.btn_auto_comment.configure(state="normal"))
+            self.after(0, lambda: self.btn_stop_bot.configure(state="disabled"))
+
+    def _auto_comment_thread(self, post_url, prompt, platform, vibe):
+        try:
+            # Step 1: Generate comment text using LLM
+            full_prompt = (
+                f"You are writing a social media comment. Vibe: {vibe}.\n"
+                f"Task: {prompt}\n\n"
+                f"Write a single natural comment (no hashtags, no quotes, no intro). "
+                f"Be concise and engaging. Max 2 sentences."
+            )
+            comment_text = self.content_gen.generate_text(full_prompt, platform=platform, vibe=vibe)
+
+            self.after(0, lambda: self.lbl_comment_status.configure(
+                text=f"POSTING: \"{comment_text[:60]}...\"", text_color="yellow"
+            ))
+
+            # Step 2: Post the comment via browser
+            if "facebook" in platform.lower():
+                result = asyncio.run_coroutine_threadsafe(
+                    self.social_manager.auto_comment_facebook(post_url, comment_text),
+                    self.loop
+                ).result(timeout=60)
+            else:  # Twitter / X
+                result = asyncio.run_coroutine_threadsafe(
+                    self.social_manager.auto_comment_twitter(post_url, comment_text),
+                    self.loop
+                ).result(timeout=60)
+
+            color = COLOR_SUCCESS if result.startswith("✅") else COLOR_ERROR
+            self.after(0, lambda: self.lbl_comment_status.configure(text=result, text_color=color))
+            self.tts.speak("Comment task finished")
+        except Exception as e:
+            self.after(0, lambda err=e: self.lbl_comment_status.configure(
+                text=f"ERROR: {err}", text_color=COLOR_ERROR
+            ))
+            self.tts.speak("Comment failed")
+        finally:
+            self.after(0, lambda: self.btn_auto_comment.configure(state="normal"))
+
 
     def _setup_data_tab(self):
         parent = self.tab_data
@@ -496,11 +857,16 @@ class App(ctk.CTk):
     def on_provider_change(self):
         """Show/hide provider-specific settings"""
         provider = self.provider_var.get()
+        # Hide all panels first
+        self.frame_api.pack_forget()
+        self.frame_ollama.pack_forget()
+        self.frame_openrouter.pack_forget()
+        # Show only the relevant one
         if provider == "ollama":
             self.frame_ollama.pack(anchor="w", padx=20, pady=10, fill="x")
-            self.frame_api.pack_forget()
-        else:
-            self.frame_ollama.pack_forget()
+        elif provider == "openrouter":
+            self.frame_openrouter.pack(anchor="w", padx=20, pady=10, fill="x")
+        else:  # gemini (default)
             self.frame_api.pack(fill="x", padx=20, pady=10)
 
     def save_ollama_config(self):
@@ -530,6 +896,40 @@ class App(ctk.CTk):
                 
         except Exception as e:
             self.log(f"ERROR: Failed to configure Ollama - {str(e)}")
+
+    def save_openrouter_config(self):
+        """Save and connect to OpenRouter"""
+        key = self.openrouter_key_entry.get().strip()
+        model = self.openrouter_model_entry.get().strip() or "google/gemini-2.0-flash-001"
+
+        if not key:
+            self.lbl_model.configure(text="ERROR: API key is required.", text_color=COLOR_ERROR)
+            return
+
+        try:
+            self.llm.configure_openrouter(key, model)
+            self.lbl_model.configure(text="TESTING OPENROUTER CONNECTION...", text_color="yellow")
+            self.update()
+
+            success, msg = self.llm.test_connection()
+
+            if success:
+                self.cfg.set("llm_provider", "openrouter")
+                self.cfg.set("openrouter_key", key)
+                self.cfg.set("openrouter_model", model)
+                self.use_ai = True
+                self.lbl_model.configure(
+                    text=f"CURRENT: OPENROUTER ({model}) - ONLINE", text_color=COLOR_SUCCESS
+                )
+                self.log(f"SETTINGS: OPENROUTER CONNECTED ({model})")
+                self.tts.speak("OpenRouter Connected")
+            else:
+                self.lbl_model.configure(text=f"ERROR: {msg}", text_color=COLOR_ERROR)
+                self.log(f"SETTINGS: OPENROUTER ERROR - {msg}")
+                self.tts.speak("OpenRouter Connection Failed")
+        except Exception as e:
+            self.log(f"ERROR: Failed to configure OpenRouter - {str(e)}")
+
 
 
     # --- Utilities ---

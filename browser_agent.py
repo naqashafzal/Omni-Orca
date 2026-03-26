@@ -44,7 +44,7 @@ class BrowserAgent:
         """)
         print("Browser started.")
 
-    async def navigate(self, url):
+    async def navigate(self, url, wait_until="networkidle"):
         """Navigates to the specified URL."""
         if not self.page:
             raise Exception("Browser not started. Call start() first.")
@@ -53,9 +53,11 @@ class BrowserAgent:
         self.record_action("navigate", {"url": url})
         
         print(f"Navigating to {url}...")
-        await self.page.goto(url)
-        # Wait for load state to ensure page is ready
-        await self.page.wait_for_load_state("networkidle")
+        try:
+            await self.page.goto(url, wait_until=wait_until, timeout=60000)
+        except Exception as e:
+            print(f"Navigation warning (proceeding anyway): {e}")
+            
         print(f"Arrived at {url}")
 
     async def get_screenshot_bytes(self):
