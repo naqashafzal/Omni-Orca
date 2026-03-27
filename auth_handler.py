@@ -30,6 +30,9 @@ PLATFORM_MAP = {
         "user_selector": "#loginUsername",
         "pass_selector": "#loginPassword",
         "btn_selector": "button[type='submit']"
+    },
+    "WhatsApp": {
+        "url": "https://web.whatsapp.com/"
     }
 }
 
@@ -49,6 +52,10 @@ async def perform_login(agent, platform, username, password):
     # Special handling for Twitter's multi-step login
     if platform == "Twitter (X)":
         await _login_twitter(agent, username, password)
+        return
+        
+    if platform == "WhatsApp":
+        print("Please scan the QR code to log into WhatsApp Web.")
         return
 
     # Standard single-page login

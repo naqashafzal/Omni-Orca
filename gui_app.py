@@ -19,6 +19,8 @@ from risk_manager import RiskManager, Portfolio, Position
 from exchange_client import ExchangeClient
 from browser_trading_client import BrowserTradingClient, HybridTradingClient
 from social_media_manager import SocialMediaManager
+from agent_orchestrator import AgentOrchestrator
+from os_agent import OSAgent
 
 
 # --- Theme Configuration ---
@@ -58,9 +60,10 @@ class App(ctk.CTk):
             self.voice_available = False
 
         self.llm = LLMClient()
-        self.llm = LLMClient()
         self.content_gen = ContentGenerator(self.llm)
         self.social_manager = SocialMediaManager(self.agent, self.content_gen, self.llm)
+        self.os_agent = OSAgent()
+        self.orchestrator = AgentOrchestrator(self.llm, self.agent, self.social_manager, self.cfg, self.os_agent)
         self.tts = TTSEngine()
         self.tts.speak("System Initialized")
         
@@ -93,17 +96,54 @@ class App(ctk.CTk):
         self.autopilot_stop_requested = False
         self.autopilot_max_iterations = 20
 
-        # --- TABVIEW ---
-        self.tab_view = ctk.CTkTabview(self, fg_color=COLOR_BG)
-        self.tab_view.pack(fill="both", expand=True, padx=10, pady=10)
+        # --- LAYOUT Grid Configuration ---
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
 
-        self.tab_cmd = self.tab_view.add("COMMAND CENTER")
-        self.tab_scheduler = self.tab_view.add("SCHEDULER")
-        self.tab_accounts = self.tab_view.add("ACCOUNTS")
-        self.tab_social = self.tab_view.add("SOCIAL MEDIA PRO")
-        self.tab_data = self.tab_view.add("DATA LAB")
-        self.tab_crypto = self.tab_view.add("CRYPTO TRADER")
-        self.tab_settings = self.tab_view.add("SYSTEM SETTINGS")
+        # --- SIDEBAR ---
+        self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
+        self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
+        self.sidebar_frame.grid_rowconfigure(15, weight=1)
+
+        logo_label = ctk.CTkLabel(self.sidebar_frame, text="NEURAL\nAUTOMATER", font=ctk.CTkFont(size=22, weight="bold"), text_color="#25D366")
+        logo_label.pack(pady=(30, 20))
+
+        # --- MAIN CONTENT FLUID ---
+        self.main_content_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.main_content_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+
+        # Tab Router
+        self.tabs = {}
+        
+        def add_tab(name):
+            btn = ctk.CTkButton(
+                self.sidebar_frame, 
+                corner_radius=0, 
+                height=40, 
+                border_spacing=10, 
+                text=name, 
+                fg_color="transparent", 
+                text_color=("gray10", "gray90"), 
+                hover_color=("gray70", "gray30"),
+                anchor="w", 
+                font=("Consolas", 13, "bold"),
+                command=lambda n=name: self.select_tab(n)
+            )
+            btn.pack(fill="x")
+            frame = ctk.CTkFrame(self.main_content_frame, corner_radius=0, fg_color="transparent")
+            self.tabs[name] = {"button": btn, "frame": frame}
+            return frame
+
+        self.tab_cmd = add_tab("COMMAND CENTER")
+        self.tab_scheduler = add_tab("SCHEDULER")
+        self.tab_accounts = add_tab("ACCOUNTS")
+        self.tab_social = add_tab("SOCIAL MEDIA PRO")
+        self.tab_whatsapp = add_tab("WHATSAPP PRO")
+        self.tab_data = add_tab("DATA LAB")
+        self.tab_crypto = add_tab("CRYPTO TRADER")
+        self.tab_agent = add_tab("AGENT LAB")
+        self.tab_settings = add_tab("SYSTEM SETTINGS")
+
 
         # Initialize trading system
         self.trading_engine = TradingEngine()
@@ -117,8 +157,10 @@ class App(ctk.CTk):
         self._setup_scheduler_tab()
         self._setup_accounts_tab()
         self._setup_social_tab()
+        self._setup_whatsapp_tab()
         self._setup_data_tab()
         self._setup_crypto_tab()
+        self._setup_agent_tab()
         self._setup_settings_tab()
 
         self.log(">> SYSTEM INITIALIZED...")
@@ -126,6 +168,19 @@ class App(ctk.CTk):
             self.log(">> NEURAL LINK ESTABLISHED (API KEY LOADED).")
         else:
             self.log(">> WARNING: NO API KEY LINKED. AI MODULE OFFLINE.")
+            
+        # Initial Selection
+        self.select_tab("COMMAND CENTER")
+
+    def select_tab(self, name):
+        """Route sidebar click to show the corresponding frame"""
+        for tab_name, data in self.tabs.items():
+            if tab_name == name:
+                data["frame"].pack(fill="both", expand=True)
+                data["button"].configure(fg_color=("gray75", "gray25"), text_color=COLOR_ACCENT)
+            else:
+                data["frame"].pack_forget()
+                data["button"].configure(fg_color="transparent", text_color=("gray10", "gray90"))
 
     def _setup_command_tab(self):
         parent = self.tab_cmd
@@ -188,6 +243,9 @@ class App(ctk.CTk):
 
         self.autopilot_checkbox = ctk.CTkCheckBox(self.cmd_frame, text="🤖 AUTO-PILOT", font=("Consolas", 11, "bold"), text_color=COLOR_ACCENT)
         self.autopilot_checkbox.pack(side="left", padx=10, pady=20)
+        
+        self.godmode_checkbox = ctk.CTkCheckBox(self.cmd_frame, text="⚡ GOD MODE (OS CONTROL)", font=("Consolas", 11, "bold"), text_color="#ffbe00")
+        self.godmode_checkbox.pack(side="left", padx=10, pady=20)
 
         self.btn_stop_autopilot = ctk.CTkButton(self.cmd_frame, text="⏹ STOP", command=self.stop_autopilot, width=80, fg_color=COLOR_ERROR, hover_color="#990000", text_color="white", font=("Consolas", 11, "bold"))
         self.btn_stop_autopilot.pack(side="left", padx=5, pady=20)
@@ -793,6 +851,80 @@ class App(ctk.CTk):
         finally:
             self.after(0, lambda: self.btn_auto_comment.configure(state="normal"))
 
+    def _setup_whatsapp_tab(self):
+        parent = self.tab_whatsapp
+        parent.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(parent, text="WHATSAPP PRO AUTOMATION", font=("Consolas", 18, "bold"), text_color="#25D366").pack(pady=20)
+        
+        frame_main = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10, border_color="#333", border_width=1)
+        frame_main.pack(fill="x", padx=20, pady=10)
+        
+        ctk.CTkLabel(frame_main, text="DIRECT MESSAGE CONSOLE", font=("Consolas", 14, "bold"), text_color="#25D366").pack(anchor="w", padx=15, pady=(15, 5))
+        
+        ctk.CTkLabel(frame_main, text="TARGET (Phone / Chat URL):", font=("Consolas", 11), text_color="gray").pack(anchor="w", padx=15)
+        self.entry_wa_target = ctk.CTkEntry(frame_main, placeholder_text="e.g. +1234567890 or https://chat.whatsapp.com/...", font=("Consolas", 12))
+        self.entry_wa_target.pack(fill="x", padx=15, pady=(0, 10))
+        
+        ctk.CTkLabel(frame_main, text="MESSAGE / AI PROMPT CONTEXT:", font=("Consolas", 11), text_color="gray").pack(anchor="w", padx=15)
+        self.txt_wa_msg = ctk.CTkTextbox(frame_main, height=80, font=("Consolas", 12))
+        self.txt_wa_msg.pack(fill="x", padx=15, pady=(0, 10))
+        
+        frame_actions = ctk.CTkFrame(frame_main, fg_color="transparent")
+        frame_actions.pack(fill="x", padx=15, pady=(5, 15))
+        
+        self.btn_wa_send = ctk.CTkButton(frame_actions, text="SEND CUSTOM MESSAGE", command=lambda: self.execute_whatsapp(ai=False), fg_color="#075e54", hover_color="#128c7e", text_color="white", font=("Consolas", 12, "bold"))
+        self.btn_wa_send.pack(side="left", padx=(0, 10))
+        
+        self.btn_wa_ai = ctk.CTkButton(frame_actions, text="GENERATE & SEND AI MESSAGE", command=lambda: self.execute_whatsapp(ai=True), fg_color="#25D366", hover_color="#1DA851", text_color="black", font=("Consolas", 12, "bold"))
+        self.btn_wa_ai.pack(side="left")
+        
+        self.lbl_wa_status = ctk.CTkLabel(frame_main, text="READY", font=("Consolas", 11), text_color="gray")
+        self.lbl_wa_status.pack(pady=10)
+
+    def execute_whatsapp(self, ai=False):
+        target = self.entry_wa_target.get().strip()
+        msg_context = self.txt_wa_msg.get("0.0", "end").strip()
+        
+        if not target or (not ai and not msg_context):
+            self.lbl_wa_status.configure(text="ERROR: MISSING TARGET OR MESSAGE", text_color=COLOR_ERROR)
+            return
+            
+        self.lbl_wa_status.configure(text="PROCESSING...", text_color="yellow")
+        self.tts.speak("Starting WhatsApp automation")
+        
+        self.btn_wa_send.configure(state="disabled")
+        self.btn_wa_ai.configure(state="disabled")
+        
+        threading.Thread(target=self._whatsapp_thread, args=(target, msg_context, ai), daemon=True).start()
+
+    def _whatsapp_thread(self, target, context, ai):
+        try:
+            if ai:
+                self.after(0, lambda: self.lbl_wa_status.configure(text="GENERATING AI MESSAGE..."))
+                prompt = (
+                    f"You are responding via WhatsApp. Context/Request: {context}\n"
+                    f"Write a natural, concise text message. Max 2 sentences."
+                )
+                msg_text = self.content_gen.generate_text(prompt, platform="WhatsApp", vibe="Friendly")
+                self.after(0, lambda: self.lbl_wa_status.configure(text=f"SENDING: {msg_text[:30]}..."))
+            else:
+                msg_text = context
+                
+            result = asyncio.run_coroutine_threadsafe(
+                self.social_manager.auto_message_whatsapp(target, msg_text),
+                self.loop
+            ).result(timeout=60)
+            
+            color = COLOR_SUCCESS if result.startswith("✅") else COLOR_ERROR
+            self.after(0, lambda: self.lbl_wa_status.configure(text=result, text_color=color))
+            self.tts.speak("WhatsApp task finished")
+        except Exception as e:
+            self.after(0, lambda: self.lbl_wa_status.configure(text=f"ERROR: {e}", text_color=COLOR_ERROR))
+            self.tts.speak("WhatsApp task failed")
+        finally:
+            self.after(0, lambda: self.btn_wa_send.configure(state="normal"))
+            self.after(0, lambda: self.btn_wa_ai.configure(state="normal"))
 
     def _setup_data_tab(self):
         parent = self.tab_data
@@ -1023,12 +1155,19 @@ class App(ctk.CTk):
         self.run_async(self._ai_pipeline(text))
 
     async def _ai_pipeline(self, text):
+        # Reset stop flag and show stop button
+        self.autopilot_stop_requested = False
+        self.after(0, lambda: self.btn_stop_autopilot.pack(side="left", padx=5, pady=20))
+        
         # 0. Get Mode
         mode = self.option_mode.get()
         
         # 1. Capture Screen
         self.update_log_from_thread("CAPTURING SCREENSHOT...")
-        screenshot = await self.agent.get_screenshot_bytes()
+        if self.godmode_checkbox.get():
+            screenshot = self.os_agent.take_screenshot()
+        else:
+            screenshot = await self.agent.get_screenshot_bytes()
         if screenshot:
             self.update_log_from_thread(f"SCREENSHOT CAPTURED ({len(screenshot)} bytes).")
         else:
@@ -1055,6 +1194,10 @@ class App(ctk.CTk):
              return
 
         for step in response:
+            if self.autopilot_stop_requested:
+                self.update_log_from_thread(">> EXECUTION HALTED BY USER.")
+                break
+                
             action = step.get("action")
             self.update_log_from_thread(f"EXECUTING: {action.upper()}")
             
@@ -1097,11 +1240,62 @@ class App(ctk.CTk):
                 self.update_log_from_thread(f"EXTRACTED {len(data)} ITEMS")
             elif action == "wait_for_text":
                 await self.agent.wait_for_text(step.get("text"))
+            elif action == "auto_message_whatsapp":
+                self.update_log_from_thread("STARTING DEDICATED WHATSAPP AUTOMATION...")
+                result = await self.social_manager.auto_message_whatsapp(step.get("target"), step.get("text"))
+                self.update_log_from_thread(f"WHATSAPP RESULT: {result}")
+            # --- OS CONTROL & FILE TOOLS ---
+            elif action == "os_mouse_click" and self.godmode_checkbox.get():
+                self.os_agent.mouse_click(step.get("x"), step.get("y"), step.get("button", "left"))
+            elif action == "os_mouse_move" and self.godmode_checkbox.get():
+                self.os_agent.mouse_move(step.get("x"), step.get("y"))
+            elif action == "os_keyboard_type" and self.godmode_checkbox.get():
+                self.os_agent.keyboard_type(step.get("text"))
+            elif action == "os_keyboard_press" and self.godmode_checkbox.get():
+                self.os_agent.keyboard_press(step.get("key_combo"))
+            elif action == "os_open_app" and self.godmode_checkbox.get():
+                self.os_agent.open_application(step.get("app_name_or_path"))
+            elif action == "os_run_command" and self.godmode_checkbox.get():
+                import subprocess
+                cmd = step.get("command")
+                if cmd:
+                    try:
+                        res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+                        out_str = res.stdout.strip() if res.stdout else ""
+                        err_str = res.stderr.strip() if res.stderr else ""
+                        final_out = out_str
+                        if err_str:
+                            final_out += f"\n[ERROR/STDERR]: {err_str}"
+                        if not final_out.strip():
+                            final_out = "SUCCESS (No Output)"
+                        if res.returncode != 0:
+                            final_out = f"FAILED [Exit {res.returncode}]:\n{final_out}"
+                        self.update_log_from_thread(f"SHELL RESULT:\n{final_out[:500]}")
+                    except Exception as e:
+                        self.update_log_from_thread(f"SHELL ERROR: {e}")
+            elif action == "os_list_dir" and self.godmode_checkbox.get():
+                import os
+                try:
+                    items = os.listdir(step.get("path", "."))
+                    items_str = ", ".join(items) if items else "Empty"
+                    self.update_log_from_thread(f"DIR CONTENTS: {items_str}")
+                except Exception as e:
+                    self.update_log_from_thread(f"DIR ERROR: {e}")
+            elif action == "os_read_file" and self.godmode_checkbox.get():
+                try:
+                    with open(step.get("path"), 'r', encoding='utf-8') as f:
+                        content = f.read(500)
+                    self.update_log_from_thread(f"FILE PREVIEW:\n{str(content)}")
+                except Exception as e:
+                    self.update_log_from_thread(f"FILE ERROR: {e}")
             else:
-                self.update_log_from_thread(f"UNKNOWN AI ACTION: {action}")
+                self.update_log_from_thread(f"UNKNOWN AI ACTION: {action} (or God Mode disabled)")
             
             # Small delay between steps
             await asyncio.sleep(0.5)
+            
+        # Hide stop button when done
+        self.after(0, lambda: self.btn_stop_autopilot.pack_forget())
 
     # Deprecated threaded method
     def _ai_thread(self, text):
@@ -1154,6 +1348,9 @@ class App(ctk.CTk):
     async def _navigate_task(self, url):
         try:
             self.update_log_from_thread(f"NAVIGATING TO: {url}")
+            if not getattr(self.agent, "page", None):
+                self.update_log_from_thread("BOOTING INTERNAL BROWSER ENGINE...")
+                await self.agent.start()
             await self.agent.navigate(url)
             self.update_log_from_thread(f"ARRIVAL CONFIRMED.")
         except Exception as e:
@@ -1225,7 +1422,10 @@ class App(ctk.CTk):
                 self.update_log_from_thread(f"AUTO-PILOT [{iteration}/{self.autopilot_max_iterations}]")
                 
                 # Capture screenshot
-                screenshot = await self.agent.get_screenshot_bytes()
+                if self.godmode_checkbox.get():
+                    screenshot = self.os_agent.take_screenshot()
+                else:
+                    screenshot = await self.agent.get_screenshot_bytes()
                 
                 # Get AI decision
                 loop = asyncio.get_running_loop()
@@ -1282,11 +1482,55 @@ class App(ctk.CTk):
                             await self.agent.press_key(step.get("key"))
                         elif action == "get_text":
                             text = await self.agent.get_text(step.get("selector"))
-                            self.update_log_from_thread(f"EXTRACTED: {text[:100] if text else 'None'}...")
+                            self.update_log_from_thread(f"  Extracted: {text}")
+                        # --- OS CONTROL ACTIONS ---
+                        elif action == "os_mouse_click" and self.godmode_checkbox.get():
+                            self.os_agent.mouse_click(step.get("x"), step.get("y"), step.get("button", "left"))
+                        elif action == "os_mouse_move" and self.godmode_checkbox.get():
+                            self.os_agent.mouse_move(step.get("x"), step.get("y"))
+                        elif action == "os_keyboard_type" and self.godmode_checkbox.get():
+                            self.os_agent.keyboard_type(step.get("text"))
+                        elif action == "os_keyboard_press" and self.godmode_checkbox.get():
+                            self.os_agent.keyboard_press(step.get("key_combo"))
+                        elif action == "os_open_app" and self.godmode_checkbox.get():
+                            self.os_agent.open_application(step.get("app_name_or_path"))
                         elif action == "copy_to_clipboard":
                             await self.agent.copy_to_clipboard(step.get("text"))
                         elif action == "paste_from_clipboard":
                             await self.agent.paste_from_clipboard(step.get("selector"))
+                        elif action == "os_run_command" and self.godmode_checkbox.get():
+                            import subprocess
+                            cmd = step.get("command")
+                            if cmd:
+                                try:
+                                    res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+                                    out_str = res.stdout.strip() if res.stdout else ""
+                                    err_str = res.stderr.strip() if res.stderr else ""
+                                    final_out = out_str
+                                    if err_str:
+                                        final_out += f"\n[ERROR/STDERR]: {err_str}"
+                                    if not final_out.strip():
+                                        final_out = "SUCCESS (No Output)"
+                                    if res.returncode != 0:
+                                        final_out = f"FAILED [Exit {res.returncode}]:\n{final_out}"
+                                    self.update_log_from_thread(f"SHELL RESULT:\n{final_out[:500]}")
+                                except Exception as e:
+                                    self.update_log_from_thread(f"SHELL ERROR: {e}")
+                        elif action == "os_list_dir" and self.godmode_checkbox.get():
+                            import os
+                            try:
+                                items = os.listdir(step.get("path", "."))
+                                items_str = ", ".join(items) if items else "Empty"
+                                self.update_log_from_thread(f"DIR CONTENTS: {items_str}")
+                            except Exception as e:
+                                self.update_log_from_thread(f"DIR ERROR: {e}")
+                        elif action == "os_read_file" and self.godmode_checkbox.get():
+                            try:
+                                with open(step.get("path"), 'r', encoding='utf-8') as f:
+                                    content = f.read(500)
+                                self.update_log_from_thread(f"FILE PREVIEW:\n{str(content)}")
+                            except Exception as e:
+                                self.update_log_from_thread(f"FILE ERROR: {e}")
                         elif action == "extract_data":
                             data = await self.agent.extract_data(step.get("selector"), step.get("attribute", "textContent"))
                             self.update_log_from_thread(f"EXTRACTED {len(data)} ITEMS")
@@ -1829,6 +2073,83 @@ class App(ctk.CTk):
         
         self.trade_history_display.configure(state="disabled")
 
+
+    def _setup_agent_tab(self):
+        parent = self.tab_agent
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(2, weight=1)
+        
+        ctk.CTkLabel(parent, text="AGENTIC ORCHESTRATOR", font=("Consolas", 18, "bold"), text_color=COLOR_ACCENT).grid(row=0, column=0, pady=10)
+        
+        # Goal Entry Frame
+        frame_goal = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10)
+        frame_goal.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        
+        ctk.CTkLabel(frame_goal, text="COMPLEX GOAL / OBJECTIVE:", font=("Consolas", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 5))
+        self.entry_agent_goal = ctk.CTkTextbox(frame_goal, height=60, font=("Consolas", 12))
+        self.entry_agent_goal.pack(fill="x", padx=10, pady=(0, 10))
+        self.entry_agent_goal.insert("0.0", "Research latest AI agent news, save a summary to memory, and post a tweet about it.")
+        
+        # Controls
+        frame_ctrl = ctk.CTkFrame(frame_goal, fg_color="transparent")
+        frame_ctrl.pack(fill="x", padx=10, pady=(0, 10))
+        
+        self.btn_start_agent = ctk.CTkButton(frame_ctrl, text="🚀 INITIALIZE AGENT", command=self.start_agent_orchestrator, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black", font=("Consolas", 12, "bold"))
+        self.btn_start_agent.pack(side="left", padx=5)
+        
+        self.btn_stop_agent = ctk.CTkButton(frame_ctrl, text="⛔ STOP AGENT", command=self.stop_agent_orchestrator, fg_color=COLOR_ERROR, hover_color="#990000", text_color="white", state="disabled", font=("Consolas", 12, "bold"))
+        self.btn_stop_agent.pack(side="left", padx=5)
+        
+        # Live Thoughts Console
+        self.agent_console = ctk.CTkTextbox(parent, fg_color=COLOR_LOG, font=("Consolas", 12), corner_radius=10)
+        self.agent_console.grid(row=2, column=0, sticky="nsew", padx=10, pady=10)
+        
+        # Wire up callback
+        def agent_ui_cb(msg, role):
+            self.after(0, lambda: self._update_agent_console(msg, role))
+        
+        self.orchestrator.set_ui_callback(agent_ui_cb)
+
+    def start_agent_orchestrator(self):
+        if not self.use_ai:
+            self._update_agent_console("ERROR: AI Provider not configured. Set API Key in Settings.", "error")
+            return
+            
+        goal = self.entry_agent_goal.get("0.0", "end").strip()
+        if not goal: return
+        
+        self.btn_start_agent.configure(state="disabled")
+        self.btn_stop_agent.configure(state="normal")
+        self.agent_console.delete("0.0", "end")
+        
+        self.run_async(self._agent_loop_task(goal))
+
+    async def _agent_loop_task(self, goal):
+        try:
+            await self.orchestrator.execute_goal(goal)
+        except Exception as e:
+            self._update_agent_console(f"FATAL ORCHESTRATOR ERROR: {e}", "error")
+            
+        self.after(0, lambda: self.btn_start_agent.configure(state="normal"))
+        self.after(0, lambda: self.btn_stop_agent.configure(state="disabled"))
+
+    def stop_agent_orchestrator(self):
+        self.orchestrator.stop()
+        self.btn_stop_agent.configure(state="disabled")
+
+    def _update_agent_console(self, msg, role):
+        self.agent_console.configure(state="normal")
+        color = "white"
+        if role == "agent": color = COLOR_ACCENT
+        elif role == "action": color = "yellow"
+        elif role == "success": color = COLOR_SUCCESS
+        elif role == "error": color = COLOR_ERROR
+        elif role == "warning": color = "orange"
+        
+        self.agent_console.insert("end", f"[{role.upper()}] {msg}\n", role)
+        self.agent_console.tag_config(role, foreground=color)
+        self.agent_console.see("end")
+        self.agent_console.configure(state="disabled")
 
 if __name__ == "__main__":
     app = App()

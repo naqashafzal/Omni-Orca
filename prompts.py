@@ -21,10 +21,25 @@ SYSTEM_PROMPTS = {
     11. scroll(x, y) - Scroll page by x, y pixels
     12. press_key(key) - Press keyboard key (e.g., "Enter", "Escape", "Tab")
     13. get_text(selector) - Extract text from element
-    14. copy_to_clipboard(text) - Copy text to clipboard
-    15. paste_from_clipboard(selector) - Paste clipboard content into element
-    16. extract_data(selector, attribute) - Extract data from multiple elements
-    17. wait_for_text(text) - Wait for specific text to appear
+    24. copy_to_clipboard(text) - Copy text to clipboard
+    25. paste_from_clipboard(selector) - Paste clipboard content into element
+    26. extract_data(selector, attribute) - Extract data from multiple elements
+    27. wait_for_text(text) - Wait for specific text to appear
+    28. os_mouse_click(x, y, button, click_count) - Physical OS click (God Mode)
+    29. os_mouse_move(x, y) - Physical OS mouse move (God Mode)
+    30. os_keyboard_type(text) - Physical OS keyboard typing (God Mode)
+    31. os_keyboard_press(key_combo) - Physical OS keyboard hotkey (God Mode)
+    32. os_open_app(app_name_or_path) - Physical OS app launch (God Mode)
+    33. os_run_command(command) - Run a shell/cmd command (God Mode)
+    34. os_list_dir(path) - List files in an OS directory (God Mode)
+    35. os_read_file(path) - Read an OS file (God Mode)
+    36. auto_message_whatsapp(target, text) - Automatically send a WhatsApp message to a phone number (e.g., '+1234567890') or chat URL
+    
+    ⚠️ GOD MODE & SCREENSHOT OVERRIDE:
+    - If you are provided with a screenshot of the "Neural Automater" GUI (the app with the "ENTER COMMAND SEQUENCE" box and "EXECUTE" button), DO NOT interact with it! NEVER return actions that click or type into this app.
+    - If the user asks for PC/OS actions (e.g., "check c drive", "what's inside my folder", "open notepad"), use `os_list_dir`, `os_run_command`, `os_open_app`, etc. Do NOT try to type their request into a search box.
+    - CRITICAL: If you use `os_open_app` to open a physical OS browser (like Firefox or Chrome), you CANNOT use `navigate`, `click`, or `type` on it! Those commands ONLY work on your internal invisible browser! To use a physically opened browser, you must use `os_keyboard_type("url")`, `os_keyboard_press("Enter")`, etc.
+    - OR, simply ignore `os_open_app` and just send a `navigate("url")` command to use your internal browser directly!
     
     Output Format:
     Return a JSON LIST of action objects.
@@ -117,6 +132,11 @@ SYSTEM_PROMPTS = {
     - paste_from_clipboard(selector) - Paste into element
     - extract_data(selector) - Get data from multiple elements
     - wait_for_text(text) - Wait for text to appear
+    - os_mouse_click(x, y, button, click_count) - Physical OS click (God Mode)
+    - os_mouse_move(x, y) - Physical OS mouse move (God Mode)
+    - os_keyboard_type(text) - Physical OS keyboard typing (God Mode)
+    - os_keyboard_press(key_combo) - Physical OS keyboard hotkey (God Mode)
+    - os_open_app(app_name_or_path) - Physical OS app launch (God Mode)
     
     AUTO-REPLY CAPABILITY:
     - You can read messages using get_text()
@@ -135,6 +155,11 @@ SYSTEM_PROMPTS = {
     - If you encounter an error or can't proceed, explain in reasoning and set "completed": true
     - Break complex tasks into small steps (1-3 actions per iteration)
     - Be adaptive: if a selector fails, try alternatives
+    
+    ⚠️ GOD MODE & SCREENSHOT OVERRIDE:
+    - If you see the "Neural Automater" GUI in the screenshot, DO NOT interact with it! Do not click its buttons or type in its boxes.
+    - If the goal relates to the OS/System (like checking folders, running commands, opening apps), use the specific `os_` tools instead of browser tools.
+    - CRITICAL: Actions like `navigate`, `click`, and `type` ONLY apply to your internal Playwright browser. You CANNOT use them to control a physical desktop Firefox/Chrome window opened via `os_open_app`. To control physical OS windows, strictly use your `os_` keyboard and mouse tools!
     
     Example Response:
     {

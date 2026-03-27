@@ -33,6 +33,14 @@ class LLMProvider(ABC):
         """
         return f"[generate_text not implemented for {type(self).__name__}]"
 
+    @abstractmethod
+    def execute_agent_prompt(self, prompt_text: str, screenshot_bytes=None) -> dict:
+        """
+        Execute a raw agent prompt (for the Agentic Orchestrator).
+        Returns a parsed JSON dictionary.
+        """
+        pass
+
 
 class GeminiProvider(LLMProvider):
     """Google Gemini AI Provider"""
@@ -53,6 +61,25 @@ class GeminiProvider(LLMProvider):
             return response.text.strip()
         except Exception as e:
             return f"[Gemini Error: {e}]"
+
+    def execute_agent_prompt(self, prompt_text: str, screenshot_bytes=None) -> dict:
+        content = [prompt_text]
+        if screenshot_bytes:
+            from PIL import Image
+            import io
+            content.append(Image.open(io.BytesIO(screenshot_bytes)))
+        try:
+            response = self.model.generate_content(content)
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text.replace("```json", "").replace("```", "")
+            elif text.startswith("```"):
+                text = text.replace("```", "")
+            
+            import json
+            return json.loads(text.strip())
+        except Exception as e:
+            return {"error": f"Gemini Execution Error: {e}"}
 
     def interpret_command(self, user_text, screenshot_bytes=None, mode="GENERAL"):
         base_prompt = self.prompts.get(mode, self.prompts["GENERAL"])
@@ -199,6 +226,34 @@ class OllamaProvider(LLMProvider):
         except Exception as e:
             return f"[Ollama Error: {e}]"
 
+    def execute_agent_prompt(self, prompt_text: str, screenshot_bytes=None) -> dict:
+        image_base64 = None
+        if screenshot_bytes:
+            import base64
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(screenshot_bytes))
+            img.thumbnail((1024, 1024))
+            buffered = io.BytesIO()
+            img.save(buffered, format="JPEG", quality=70)
+            image_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            
+        try:
+            response_text = self._call_ollama(prompt_text, image_base64)
+            if isinstance(response_text, dict) and "error" in response_text:
+                return response_text
+                
+            text = str(response_text).strip()
+            if text.startswith("```json"):
+                text = text.replace("```json", "").replace("```", "")
+            elif text.startswith("```"):
+                text = text.replace("```", "")
+                
+            import json
+            return json.loads(text.strip())
+        except Exception as e:
+            return {"error": f"Ollama Execution Error: {e}"}
+
     def interpret_command(self, user_text, screenshot_bytes=None, mode="GENERAL"):
         base_prompt = self.prompts.get(mode, self.prompts["GENERAL"])
 
@@ -232,8 +287,16 @@ class OllamaProvider(LLMProvider):
         if isinstance(response_text, dict) and "error" in response_text:
             return response_text
 
+        import re
+        text = str(response_text).strip()
+        
+        # Regex to find JSON arrays
+        match = re.search(r'\[.*\]', text, re.DOTALL)
+        if match:
+            text = match.group(0)
+            
         try:
-            data = json.loads(response_text)
+            data = json.loads(text)
             if isinstance(data, dict):
                 return [data]
             elif isinstance(data, list):
@@ -241,7 +304,7 @@ class OllamaProvider(LLMProvider):
             else:
                 return {"error": "Invalid JSON format"}
         except json.JSONDecodeError:
-            return {"error": f"Invalid JSON from Ollama: {response_text}"}
+            return {"error": f"Invalid JSON from Ollama: {text}"}
 
     def autopilot_step(self, goal, screenshot_bytes=None):
         prompt = f"""
@@ -263,15 +326,52 @@ class OllamaProvider(LLMProvider):
         if isinstance(response_text, dict) and "error" in response_text:
             return response_text
 
+        import re
+        text = str(response_text).strip()
+        
+        # Regex to find JSON object
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            text = match.group(0)
+
         try:
-            data = json.loads(response_text)
+            data = json.loads(text)
             if not isinstance(data, dict):
                 return {"error": "Invalid response format"}
             if "completed" not in data or "actions" not in data:
                 return {"error": "Missing required fields"}
             return data
         except json.JSONDecodeError:
-            return {"error": f"Invalid JSON from Ollama: {response_text}"}
+            return {"error": f"Invalid JSON from Ollama: {text}"}
+
+    def execute_agent_prompt(self, prompt_text: str, screenshot_bytes=None) -> dict:
+        image_base64 = None
+        if screenshot_bytes:
+            import base64
+            image_base64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+
+        response_text = self._call_ollama(prompt_text, image_base64)
+        if isinstance(response_text, dict) and "error" in response_text:
+            return response_text
+
+        import re
+        text = str(response_text).strip()
+        # Clean markdown
+        if "```json" in text:
+            text = text.split("```json")[-1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].strip()
+
+        # Robust JSON extraction via regex if still wrapped
+        if not text.startswith("{"):
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match:
+                text = match.group(0)
+
+        try:
+            return json.loads(text)
+        except Exception as e:
+            return {"error": f"Agent Execution Error: {str(e)}"}
 
     def test_connection(self):
         """Test connection to Ollama server"""
@@ -321,6 +421,9 @@ class OpenRouterProvider(LLMProvider):
             )
             resp.raise_for_status()
             data = resp.json()
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data["error"]))
+                return f"ERROR: OpenRouter Error Payload: {err_msg}"
             return data["choices"][0]["message"]["content"]
         except requests.exceptions.ConnectionError:
             return "ERROR: Cannot connect to OpenRouter. Check internet."
@@ -370,6 +473,10 @@ class OpenRouterProvider(LLMProvider):
         messages = [self._build_user_message(prompt, screenshot_bytes)]
         result = self._call(messages)
 
+        if result.startswith("ERROR:") and screenshot_bytes:
+            messages = [{"role": "user", "content": prompt}]
+            result = self._call(messages)
+
         if result.startswith("ERROR:"):
             return {"error": result}
 
@@ -399,6 +506,10 @@ class OpenRouterProvider(LLMProvider):
         messages = [self._build_user_message(prompt, screenshot_bytes)]
         result = self._call(messages)
 
+        if result.startswith("ERROR:") and screenshot_bytes:
+            messages = [{"role": "user", "content": prompt}]
+            result = self._call(messages)
+
         if result.startswith("ERROR:"):
             return {"error": result}
 
@@ -417,6 +528,28 @@ class OpenRouterProvider(LLMProvider):
             return data
         except json.JSONDecodeError:
             return {"error": f"Invalid JSON from OpenRouter: {text}"}
+
+    def execute_agent_prompt(self, prompt_text: str, screenshot_bytes=None) -> dict:
+        messages = [self._build_user_message(prompt_text, screenshot_bytes)]
+        result = self._call(messages)
+
+        if result.startswith("ERROR:") and screenshot_bytes:
+            messages = [{"role": "user", "content": prompt_text}]
+            result = self._call(messages)
+
+        if result.startswith("ERROR:"):
+            return {"error": result}
+
+        text = result.strip()
+        if text.startswith("```json"):
+            text = text.replace("```json", "").replace("```", "")
+        elif text.startswith("```"):
+            text = text.replace("```", "")
+
+        try:
+            return json.loads(text)
+        except Exception as e:
+            return {"error": f"Agent Execution Error: {str(e)}"}
 
     def test_connection(self):
         """Verify the API key with a minimal request."""
@@ -473,6 +606,12 @@ class LLMClient:
         if not self.provider:
             return {"error": "No LLM provider configured"}
         return self.provider.autopilot_step(goal, screenshot_bytes)
+
+    def execute_agent_prompt(self, prompt_text: str, screenshot_bytes=None) -> dict:
+        """Execute raw agent prompt (JSON object output)"""
+        if not self.provider:
+            return {"error": "No LLM provider configured"}
+        return self.provider.execute_agent_prompt(prompt_text, screenshot_bytes)
 
     def get_provider_name(self):
         """Get the name of the current provider"""

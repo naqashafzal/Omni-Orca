@@ -44,6 +44,69 @@ class BrowserAgent:
         """)
         print("Browser started.")
 
+    async def attach_to_existing_browser(self, port=9222) -> bool:
+        """Attempts to connect to an existing Chrome instance over CDP."""
+        try:
+            self.playwright = await async_playwright().start()
+            self.browser = await self.playwright.chromium.connect_over_cdp(f"http://localhost:{port}")
+            if self.browser.contexts:
+                context = self.browser.contexts[0]
+                self.page = context.pages[0] if context.pages else await context.new_page()
+            else:
+                self.page = await self.browser.new_page()
+            print(f"Attached to existing browser on port {port}.")
+            return True
+        except Exception as e:
+            print(f"Failed to attach to browser on port {port}. Is Chrome running with --remote-debugging-port={port}?")
+            return False
+
+    async def get_open_tabs(self):
+        """Returns a list of titles for all open tabs in the current context."""
+        if not self.browser or not self.browser.contexts:
+            return []
+        pages = self.browser.contexts[0].pages
+        tabs = []
+        for i, p in enumerate(pages):
+            try:
+                tabs.append(f"[{i}] {await p.title()}")
+            except:
+                tabs.append(f"[{i}] Unknown")
+        return tabs
+
+    async def switch_tab(self, index: int):
+        """Switches to the tab at the given index."""
+        if not self.browser or not self.browser.contexts:
+            return "No browser context."
+        pages = self.browser.contexts[0].pages
+        if 0 <= index < len(pages):
+            self.page = pages[index]
+            await self.page.bring_to_front()
+            return f"Switched to tab {index}: {await self.page.title()}"
+        return f"Invalid tab index {index}."
+
+    async def close_tab(self, index: int):
+        """Closes the tab at the given index."""
+        if not self.browser or not self.browser.contexts:
+            return "No browser context."
+        pages = self.browser.contexts[0].pages
+        if 0 <= index < len(pages):
+            target_page = pages[index]
+            try:
+                title = await target_page.title()
+            except:
+                title = "Unknown"
+            await target_page.close()
+            # If we closed the active page, fallback to remaining
+            if self.page == target_page:
+                remaining = self.browser.contexts[0].pages
+                if remaining:
+                    self.page = remaining[0]
+                    await self.page.bring_to_front()
+                else:
+                    self.page = None
+            return f"Closed tab {index}: {title}"
+        return f"Invalid tab index {index}."
+
     async def navigate(self, url, wait_until="networkidle"):
         """Navigates to the specified URL."""
         if not self.page:

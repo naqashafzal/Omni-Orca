@@ -96,10 +96,10 @@ class SocialMediaManager:
             pass
         for char in text:
             await self.browser.page.keyboard.type(char)
-            await asyncio.sleep(random.uniform(0.04, 0.22))
+            await asyncio.sleep(random.uniform(0.01, 0.05))
         # Occasional human pause mid-text
-        if random.random() < 0.3:
-            await asyncio.sleep(random.uniform(0.5, 1.5))
+        if random.random() < 0.2:
+            await asyncio.sleep(random.uniform(0.1, 0.3))
 
     async def _random_scroll(self):
         """Perform human-like random scrolling."""
@@ -189,7 +189,7 @@ class SocialMediaManager:
             search_url = f"https://x.com/search?q={kw.strip().replace(' ', '%20')}&f=live"
             try:
                 await self.browser.navigate(search_url)
-                await asyncio.sleep(4)
+                await asyncio.sleep(1.5)
             except Exception as e:
                 cb(f"⚠️ Navigation error: {e}")
                 continue
@@ -237,7 +237,7 @@ class SocialMediaManager:
 
                 try:
                     await self.browser.navigate(url)
-                    await asyncio.sleep(random.uniform(2.5, 4.0))
+                    await asyncio.sleep(random.uniform(1.0, 1.5))
                     await self._random_scroll()
                 except Exception as e:
                     cb(f"⚠️ Navigation error for tweet: {e}")
@@ -310,8 +310,8 @@ class SocialMediaManager:
                 # Open the reply box if not visible
                 if not await self.browser.page.is_visible(reply_box):
                     try:
-                        await self.browser.page.click("[data-testid='reply']", timeout=4000)
-                        await asyncio.sleep(2)
+                        await self.browser.page.click("[data-testid='reply']", timeout=2000)
+                        await asyncio.sleep(0.5)
                     except Exception:
                         pass
 
@@ -330,7 +330,7 @@ class SocialMediaManager:
 
                 # Type comment character-by-character
                 await self._type_like_human(reply_box, comment_text)
-                await asyncio.sleep(random.uniform(0.8, 1.5))
+                await asyncio.sleep(random.uniform(0.2, 0.4))
 
                 # ── Submit ──
                 # Try clicking the Post/Tweet button
@@ -346,7 +346,7 @@ class SocialMediaManager:
                     await self.browser.page.keyboard.press("Control+Enter")
                     posted = True
 
-                await asyncio.sleep(3)
+                await asyncio.sleep(1.0)
 
                 # ── Verify submission ──
                 # If the reply box is GONE or EMPTY, it means the tweet was submitted
@@ -445,6 +445,52 @@ class SocialMediaManager:
             return "✅ Comment posted on Facebook successfully."
         except Exception as e:
             return f"Error auto-commenting on Facebook: {e}"
+
+    async def auto_message_whatsapp(self, target: str, message_text: str) -> str:
+        """Send a single message on WhatsApp Web given a phone number or URL."""
+        if not self.browser.page:
+            await self.browser.start()
+
+        if "chat.whatsapp.com" in target or "wa.me" in target:
+            target_url = target if target.startswith("http") else f"https://{target}"
+        else:
+            clean_number = re.sub(r'\D', '', target)
+            target_url = f"https://web.whatsapp.com/send/?phone={clean_number}"
+
+        try:
+            await self.browser.navigate(target_url, wait_until="domcontentloaded")
+            await asyncio.sleep(5)  # Let WhatsApp Web load
+
+            # Fallbacks for the message input box selector
+            selectors = [
+                "div[title='Type a message']",
+                "div[aria-label='Type a message']",
+                "div[aria-placeholder='Type a message']",
+                "div[contenteditable='true'][data-tab='10']",
+                "div[contenteditable='true'][data-tab='1']"
+            ]
+
+            clicked = False
+            for _ in range(15):  # Wait up to ~30s for the chat to fully load
+                for sel in selectors:
+                    if await self.browser.page.is_visible(sel):
+                        await self.browser.page.click(sel)
+                        clicked = True
+                        break
+                if clicked:
+                    break
+                await asyncio.sleep(2)
+
+            if not clicked:
+                return "Error: Could not find WhatsApp message box. Are you logged in via Accounts tab?"
+
+            await self.browser.page.keyboard.type(message_text, delay=30)
+            await asyncio.sleep(0.5)
+            await self.browser.page.keyboard.press("Enter")
+            await asyncio.sleep(2)
+            return "✅ Message sent on WhatsApp successfully."
+        except Exception as e:
+            return f"Error messaging on WhatsApp: {e}"
 
     # ─────────────────────────────────────────────
     # Content / Trends methods

@@ -1,3 +1,6 @@
-2026/03/26-19:18:17.021 83e8 Reusing MANIFEST C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\Local Storage\leveldb/MANIFEST-000001
-2026/03/26-19:18:17.028 83e8 Recovering log #4
-2026/03/26-19:18:17.032 83e8 Reusing old log C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\Local Storage\leveldb/000004.log 
+2026/03/27-23:38:49.459 14d8 Reusing MANIFEST C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\Local Storage\leveldb/MANIFEST-000001
+2026/03/27-23:38:49.470 14d8 Recovering log #4
+2026/03/27-23:38:49.473 14d8 Reusing old log C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\Local Storage\leveldb/000004.log 
+2026/03/27-23:40:50.139 3f84 Level-0 table #7: started
+2026/03/27-23:40:50.151 3f84 Level-0 table #7: 19358 bytes OK
+2026/03/27-23:40:50.154 3f84 Delete type=0 #4
