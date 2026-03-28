@@ -93,10 +93,43 @@ class OSAgent:
         """
         Attempts to open an application by spawning a subprocess.
         In Windows, 'start <app_name>' via shell usually works for system apps.
+        For UWP apps (like WhatsApp), we use the app protocol (e.g., 'start whatsapp:').
         """
         try:
-            # Popen instead of run so it doesn't block
-            subprocess.Popen(["start", "", app_name_or_path], shell=True)
-            return f"Attempted to launch '{app_name_or_path}'"
+            import os
+            clean_name = str(app_name_or_path).lower().strip()
+            
+            # Map common human app names to Windows executables
+            app_mappings = {
+                "task manager": "taskmgr",
+                "calculator": "calc",
+                "notepad": "notepad",
+                "paint": "mspaint",
+                "command prompt": "cmd",
+                "cmd": "cmd",
+                "word": "winword",
+                "excel": "excel",
+                "powerpoint": "powerpnt",
+                "settings": "ms-settings:",
+                "explorer": "explorer",
+                "file explorer": "explorer",
+                "chrome": "chrome",
+                "edge": "msedge",
+                "firefox": "firefox",
+                "whatsapp": "whatsapp:",
+                "spotify": "spotify:",
+            }
+            
+            # Translate if necessary
+            target = app_mappings.get(clean_name, clean_name)
+            
+            # Common UWP app protocols
+            if target.endswith(':'):
+                subprocess.Popen(f'start {target}', shell=True)
+                return f"Attempted to launch Windows App via protocol: '{target}'"
+            else:
+                # Standard desktop apps or absolute paths
+                subprocess.Popen(f'start "" "{target}"', shell=True)
+                return f"Attempted to launch standard app: '{target}'"
         except Exception as e:
             return f"Error opening application '{app_name_or_path}': {e}"

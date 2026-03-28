@@ -1,33 +1,45 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.env
-.venv
-env/
+*.pyo
+*.pyd
+*.pyc
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
 venv/
-ENV/
-env.bak/
-venv.bak/
+.venv/
+env/
 
-# Configuration (Secrets)
-config.json
-
-# Logs and databases
-*.log
-*.sqlite
-
-# OS
-.DS_Store
-Thumbs.db
-
-# VS Code
+# IDE
 .vscode/
+.idea/
+*.suo
+*.user
 
-# Playwright
-test-results/
-playwright-report/
+# Secrets & Credentials
+.secret.key
+config.json
+calendar_credentials.json
+calendar_token.json
+*.env
+.env
+
+# Databases & Memory
+*.db
+*.sqlite
+*.sqlite3
+memory_vault/
+
+# Browser
+browser_profile/
+tmp_test_profile/
 
 # Recordings
-recording.json
+recordings/
+
+# Logs
+*.log

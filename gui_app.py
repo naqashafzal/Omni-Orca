@@ -21,6 +21,12 @@ from browser_trading_client import BrowserTradingClient, HybridTradingClient
 from social_media_manager import SocialMediaManager
 from agent_orchestrator import AgentOrchestrator
 from os_agent import OSAgent
+from vision_agent import VisionAgent
+from email_agent import EmailAgent
+from calendar_agent import CalendarAgent
+from call_agent import CallAgent
+from wake_word_agent import WakeWordAgent
+from web_search_agent import WebSearchAgent
 
 
 # --- Theme Configuration ---
@@ -64,6 +70,13 @@ class App(ctk.CTk):
         self.social_manager = SocialMediaManager(self.agent, self.content_gen, self.llm)
         self.os_agent = OSAgent()
         self.orchestrator = AgentOrchestrator(self.llm, self.agent, self.social_manager, self.cfg, self.os_agent)
+        self.vision_agent = VisionAgent(self.llm, gui_callback=self.show_vision_toast)
+        # V3: Personal Assistant Modules
+        self.email_agent_v3 = EmailAgent()
+        self.calendar_agent_v3 = CalendarAgent()
+        self.call_agent_v3 = CallAgent()
+        self.web_search_v3 = WebSearchAgent()
+        self.wake_word_agent = WakeWordAgent(on_activated_callback=self._on_wake_word)
         self.tts = TTSEngine()
         self.tts.speak("System Initialized")
         
@@ -135,10 +148,12 @@ class App(ctk.CTk):
             return frame
 
         self.tab_cmd = add_tab("COMMAND CENTER")
+        self.tab_chat = add_tab("NEURAL CHAT")
         self.tab_scheduler = add_tab("SCHEDULER")
         self.tab_accounts = add_tab("ACCOUNTS")
         self.tab_social = add_tab("SOCIAL MEDIA PRO")
         self.tab_whatsapp = add_tab("WHATSAPP PRO")
+        self.tab_comms = add_tab("COMMUNICATIONS")
         self.tab_data = add_tab("DATA LAB")
         self.tab_crypto = add_tab("CRYPTO TRADER")
         self.tab_agent = add_tab("AGENT LAB")
@@ -154,10 +169,12 @@ class App(ctk.CTk):
         self.current_symbol = "BTCUSDT"
 
         self._setup_command_tab()
+        self._setup_chat_tab()
         self._setup_scheduler_tab()
         self._setup_accounts_tab()
         self._setup_social_tab()
         self._setup_whatsapp_tab()
+        self._setup_communications_tab()
         self._setup_data_tab()
         self._setup_crypto_tab()
         self._setup_agent_tab()
@@ -244,8 +261,11 @@ class App(ctk.CTk):
         self.autopilot_checkbox = ctk.CTkCheckBox(self.cmd_frame, text="🤖 AUTO-PILOT", font=("Consolas", 11, "bold"), text_color=COLOR_ACCENT)
         self.autopilot_checkbox.pack(side="left", padx=10, pady=20)
         
-        self.godmode_checkbox = ctk.CTkCheckBox(self.cmd_frame, text="⚡ GOD MODE (OS CONTROL)", font=("Consolas", 11, "bold"), text_color="#ffbe00")
+        self.godmode_checkbox = ctk.CTkCheckBox(self.cmd_frame, text="⚡ GOD MODE", font=("Consolas", 11, "bold"), text_color="#ffbe00")
         self.godmode_checkbox.pack(side="left", padx=10, pady=20)
+        
+        self.vision_checkbox = ctk.CTkCheckBox(self.cmd_frame, text="👁️ VISION AI", command=self.toggle_vision, font=("Consolas", 11, "bold"), text_color="#00ffcc")
+        self.vision_checkbox.pack(side="left", padx=10, pady=20)
 
         self.btn_stop_autopilot = ctk.CTkButton(self.cmd_frame, text="⏹ STOP", command=self.stop_autopilot, width=80, fg_color=COLOR_ERROR, hover_color="#990000", text_color="white", font=("Consolas", 11, "bold"))
         self.btn_stop_autopilot.pack(side="left", padx=5, pady=20)
@@ -341,6 +361,72 @@ class App(ctk.CTk):
         # Current status
         self.lbl_model = ctk.CTkLabel(self.frame_model, text=f"CURRENT: {self.llm.get_provider_name().upper()}", font=("Consolas", 12))
         self.lbl_model.pack(anchor="w", padx=20, pady=(10, 20))
+
+
+    def _setup_chat_tab(self):
+        parent = self.tab_chat
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(parent, text="N E U R A L   C H A T", font=("Consolas", 18, "bold"), text_color=COLOR_ACCENT).grid(row=0, column=0, pady=20)
+
+        self.chat_history_textbox = ctk.CTkTextbox(parent, font=("Consolas", 13), fg_color=COLOR_LOG, text_color="white", corner_radius=10)
+        self.chat_history_textbox.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
+        self.chat_history_textbox.insert("end", ">> NEURAL CHAT INITIALIZED...\n\n")
+        self.chat_history_textbox.configure(state="disabled")
+
+        frame_input = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_input.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 20))
+        frame_input.grid_columnconfigure(0, weight=1)
+
+        self.entry_chat = ctk.CTkEntry(frame_input, placeholder_text="Ask me anything without executing commands...", font=("Consolas", 14), height=40)
+        self.entry_chat.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        self.entry_chat.bind("<Return>", lambda e: self.submit_chat())
+
+        self.btn_chat_send = ctk.CTkButton(frame_input, text="SEND", command=self.submit_chat, width=80, height=40, font=("Consolas", 12, "bold"), fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black")
+        self.btn_chat_send.grid(row=0, column=1)
+
+    def submit_chat(self):
+        text = self.entry_chat.get().strip()
+        if not text: return
+        self.entry_chat.delete(0, 'end')
+        
+        self.append_chat(f"USER: {text}\n")
+        self.append_chat(f"SYSTEM: Typing...\n")
+        
+        self.btn_chat_send.configure(state="disabled")
+        threading.Thread(target=self._chat_worker, args=(text,), daemon=True).start()
+
+    def append_chat(self, text):
+        self.chat_history_textbox.configure(state="normal")
+        content = self.chat_history_textbox.get("1.0", "end-1c")
+        if content.endswith("SYSTEM: Typing..."):
+            self.chat_history_textbox.delete("end-18c", "end")
+            
+        self.chat_history_textbox.insert("end", text)
+        self.chat_history_textbox.see("end")
+        self.chat_history_textbox.configure(state="disabled")
+
+    def _chat_worker(self, text):
+        if not self.use_ai:
+            response = "ERROR: AI Model not configured. Please set up API key in SYSTEM SETTINGS."
+        else:
+            try:
+                # pass the last 4000 characters to provide context implicitly
+                context = self.chat_history_textbox.get("1.0", "end-1c")
+                context = context[-4000:] if len(context) > 4000 else context
+                
+                full_prompt = (
+                    "You are Neural Automater, an advanced desktop AI Assistant.\n"
+                    f"Conversation so far:\n{context}\n"
+                    "Reply naturally to the USER. Do not use JSON. Just chat."
+                )
+                response = self.llm.generate_text(full_prompt)
+            except Exception as e:
+                response = f"ERROR: {e}"
+                
+        self.after(0, lambda: self.append_chat(f"AI: {response}\n\n"))
+        self.after(0, lambda: self.btn_chat_send.configure(state="normal"))
 
 
     def _setup_scheduler_tab(self):
@@ -851,6 +937,223 @@ class App(ctk.CTk):
         finally:
             self.after(0, lambda: self.btn_auto_comment.configure(state="normal"))
 
+    # =====================================================================
+    # COMMUNICATIONS TAB — V3: Email, Calendar, Phone, Wake Word
+    # =====================================================================
+    def _setup_communications_tab(self):
+        parent = self.tab_comms
+        parent.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(parent, text="⚡ COMMUNICATIONS HUB", font=("Consolas", 18, "bold"), text_color="#00e5ff").pack(pady=(15, 5))
+        ctk.CTkLabel(parent, text="Email · Calendar · Phone · Wake Word", font=("Consolas", 11), text_color="gray").pack(pady=(0, 10))
+
+        scroll = ctk.CTkScrollableFrame(parent, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=10, pady=5)
+        scroll.grid_columnconfigure(0, weight=1)
+
+        # ── EMAIL PANEL ────────────────────────────────────────────────
+        email_frame = ctk.CTkFrame(scroll, fg_color=COLOR_PANEL, corner_radius=10, border_color="#00e5ff", border_width=1)
+        email_frame.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(email_frame, text="📧 GMAIL INTEGRATION", font=("Consolas", 13, "bold"), text_color="#00e5ff").pack(anchor="w", padx=15, pady=(12, 5))
+
+        row_email_cfg = ctk.CTkFrame(email_frame, fg_color="transparent")
+        row_email_cfg.pack(fill="x", padx=15, pady=2)
+        self.entry_email_addr = ctk.CTkEntry(row_email_cfg, placeholder_text="your@gmail.com", font=("Consolas", 12), width=220)
+        self.entry_email_addr.pack(side="left", padx=(0, 10))
+        self.entry_email_pw = ctk.CTkEntry(row_email_cfg, placeholder_text="Gmail App Password", font=("Consolas", 12), show="*", width=200)
+        self.entry_email_pw.pack(side="left", padx=(0, 10))
+        ctk.CTkButton(row_email_cfg, text="CONNECT", font=("Consolas", 12, "bold"), fg_color="#00e5ff", text_color="black", hover_color="#00b8cc", width=100, command=self._email_connect).pack(side="left")
+
+        self.lbl_email_status = ctk.CTkLabel(email_frame, text="Not connected", font=("Consolas", 11), text_color="gray")
+        self.lbl_email_status.pack(anchor="w", padx=15, pady=2)
+
+        row_email_btns = ctk.CTkFrame(email_frame, fg_color="transparent")
+        row_email_btns.pack(fill="x", padx=15, pady=5)
+        ctk.CTkButton(row_email_btns, text="📥 READ INBOX", font=("Consolas", 12, "bold"), fg_color=COLOR_PANEL, border_color="#00e5ff", border_width=1, text_color="#00e5ff", command=self._email_read_inbox).pack(side="left", padx=(0, 10))
+
+        # Compose panel
+        ctk.CTkLabel(email_frame, text="COMPOSE:", font=("Consolas", 11), text_color="gray").pack(anchor="w", padx=15)
+        self.entry_email_to = ctk.CTkEntry(email_frame, placeholder_text="To: recipient@email.com", font=("Consolas", 12))
+        self.entry_email_to.pack(fill="x", padx=15, pady=2)
+        self.entry_email_subj = ctk.CTkEntry(email_frame, placeholder_text="Subject", font=("Consolas", 12))
+        self.entry_email_subj.pack(fill="x", padx=15, pady=2)
+        self.txt_email_body = ctk.CTkTextbox(email_frame, height=80, font=("Consolas", 12))
+        self.txt_email_body.pack(fill="x", padx=15, pady=2)
+        ctk.CTkButton(email_frame, text="📤 SEND EMAIL", font=("Consolas", 12, "bold"), fg_color="#00cc55", text_color="black", hover_color="#00993f", command=self._email_send).pack(anchor="w", padx=15, pady=(5, 12))
+
+        self.txt_email_output = ctk.CTkTextbox(email_frame, height=160, font=("Consolas", 11), fg_color=COLOR_LOG)
+        self.txt_email_output.pack(fill="x", padx=15, pady=(0, 12))
+
+        # ── CALENDAR PANEL ─────────────────────────────────────────────
+        cal_frame = ctk.CTkFrame(scroll, fg_color=COLOR_PANEL, corner_radius=10, border_color="#7b2fff", border_width=1)
+        cal_frame.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(cal_frame, text="📅 GOOGLE CALENDAR", font=("Consolas", 13, "bold"), text_color="#7b2fff").pack(anchor="w", padx=15, pady=(12, 5))
+
+        row_cal = ctk.CTkFrame(cal_frame, fg_color="transparent")
+        row_cal.pack(fill="x", padx=15, pady=5)
+        ctk.CTkButton(row_cal, text="🔗 CONNECT GOOGLE", font=("Consolas", 12, "bold"), fg_color="#7b2fff", text_color="white", width=180, command=self._calendar_connect).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(row_cal, text="📋 VIEW UPCOMING", font=("Consolas", 12, "bold"), fg_color=COLOR_PANEL, border_color="#7b2fff", border_width=1, text_color="#7b2fff", command=self._calendar_view).pack(side="left", padx=(0, 10))
+
+        ctk.CTkLabel(cal_frame, text="CREATE EVENT:", font=("Consolas", 11), text_color="gray").pack(anchor="w", padx=15, pady=(5, 0))
+        row_new_event = ctk.CTkFrame(cal_frame, fg_color="transparent")
+        row_new_event.pack(fill="x", padx=15, pady=2)
+        self.entry_cal_title = ctk.CTkEntry(row_new_event, placeholder_text="Event Title", font=("Consolas", 12), width=200)
+        self.entry_cal_title.pack(side="left", padx=(0, 5))
+        self.entry_cal_date = ctk.CTkEntry(row_new_event, placeholder_text="YYYY-MM-DD", font=("Consolas", 12), width=130)
+        self.entry_cal_date.pack(side="left", padx=(0, 5))
+        self.entry_cal_time = ctk.CTkEntry(row_new_event, placeholder_text="HH:MM", font=("Consolas", 12), width=80)
+        self.entry_cal_time.pack(side="left", padx=(0, 5))
+        ctk.CTkButton(row_new_event, text="ADD", font=("Consolas", 11, "bold"), fg_color="#7b2fff", text_color="white", width=60, command=self._calendar_create).pack(side="left")
+
+        self.txt_cal_output = ctk.CTkTextbox(cal_frame, height=120, font=("Consolas", 11), fg_color=COLOR_LOG)
+        self.txt_cal_output.pack(fill="x", padx=15, pady=(5, 12))
+
+        # ── PHONE / SMS PANEL ─────────────────────────────────────────
+        phone_frame = ctk.CTkFrame(scroll, fg_color=COLOR_PANEL, corner_radius=10, border_color="#ff6600", border_width=1)
+        phone_frame.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(phone_frame, text="📞 AI PHONE & SMS (TWILIO)", font=("Consolas", 13, "bold"), text_color="#ff6600").pack(anchor="w", padx=15, pady=(12, 5))
+        ctk.CTkLabel(phone_frame, text="Requires a Twilio account → twilio.com (free trial gives $15 credit)", font=("Consolas", 10), text_color="gray").pack(anchor="w", padx=15)
+
+        row_twilio_cfg = ctk.CTkFrame(phone_frame, fg_color="transparent")
+        row_twilio_cfg.pack(fill="x", padx=15, pady=5)
+        self.entry_twilio_sid = ctk.CTkEntry(row_twilio_cfg, placeholder_text="Account SID", font=("Consolas", 12), width=200)
+        self.entry_twilio_sid.pack(side="left", padx=(0, 5))
+        self.entry_twilio_token = ctk.CTkEntry(row_twilio_cfg, placeholder_text="Auth Token", font=("Consolas", 12), show="*", width=180)
+        self.entry_twilio_token.pack(side="left", padx=(0, 5))
+        self.entry_twilio_from = ctk.CTkEntry(row_twilio_cfg, placeholder_text="+1XXXXXXXXXX", font=("Consolas", 12), width=130)
+        self.entry_twilio_from.pack(side="left", padx=(0, 5))
+        ctk.CTkButton(row_twilio_cfg, text="CONNECT", font=("Consolas", 11, "bold"), fg_color="#ff6600", text_color="black", width=90, command=self._phone_connect).pack(side="left")
+
+        self.lbl_phone_status = ctk.CTkLabel(phone_frame, text="Not connected", font=("Consolas", 11), text_color="gray")
+        self.lbl_phone_status.pack(anchor="w", padx=15)
+
+        self.entry_phone_to = ctk.CTkEntry(phone_frame, placeholder_text="To Number: +923001234567", font=("Consolas", 12))
+        self.entry_phone_to.pack(fill="x", padx=15, pady=5)
+        self.entry_phone_msg = ctk.CTkEntry(phone_frame, placeholder_text="Message to speak / send as SMS", font=("Consolas", 12))
+        self.entry_phone_msg.pack(fill="x", padx=15, pady=2)
+
+        row_phone_btns = ctk.CTkFrame(phone_frame, fg_color="transparent")
+        row_phone_btns.pack(fill="x", padx=15, pady=(5, 12))
+        ctk.CTkButton(row_phone_btns, text="📞 CALL", font=("Consolas", 12, "bold"), fg_color="#ff6600", text_color="black", width=100, command=self._phone_call).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(row_phone_btns, text="💬 SEND SMS", font=("Consolas", 12, "bold"), fg_color=COLOR_PANEL, border_color="#ff6600", border_width=1, text_color="#ff6600", width=110, command=self._phone_sms).pack(side="left")
+
+        # ── WAKE WORD PANEL ───────────────────────────────────────────
+        wake_frame = ctk.CTkFrame(scroll, fg_color=COLOR_PANEL, corner_radius=10, border_color="#00ffcc", border_width=1)
+        wake_frame.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(wake_frame, text="👂 WAKE WORD: \"HEY AUTOMATER\"", font=("Consolas", 13, "bold"), text_color="#00ffcc").pack(anchor="w", padx=15, pady=(12, 5))
+        ctk.CTkLabel(wake_frame, text="Always-on microphone listener. Activates Neural Automater hands-free.", font=("Consolas", 10), text_color="gray").pack(anchor="w", padx=15)
+
+        row_wake = ctk.CTkFrame(wake_frame, fg_color="transparent")
+        row_wake.pack(fill="x", padx=15, pady=(10, 12))
+        self.wake_toggle = ctk.CTkSwitch(row_wake, text="Enable Wake Word Listener", font=("Consolas", 12, "bold"), text_color="#00ffcc", command=self._toggle_wake_word)
+        self.wake_toggle.pack(side="left")
+        self.lbl_wake_status = ctk.CTkLabel(row_wake, text="● INACTIVE", font=("Consolas", 11), text_color="gray")
+        self.lbl_wake_status.pack(side="left", padx=20)
+
+    # ── Communications Action Methods ──────────────────────────────────
+    def _email_connect(self):
+        addr = self.entry_email_addr.get().strip()
+        pw = self.entry_email_pw.get().strip()
+        if not addr or not pw:
+            self.lbl_email_status.configure(text="⚠ Enter email and App Password", text_color="yellow")
+            return
+        result = self.email_agent_v3.configure(addr, pw)
+        color = "#00ff66" if "✅" in result else COLOR_ERROR
+        self.lbl_email_status.configure(text=result[:80], text_color=color)
+
+    def _email_read_inbox(self):
+        def task():
+            result = self.email_agent_v3.get_unread(5)
+            self.after(0, lambda: self._email_output(result))
+        threading.Thread(target=task, daemon=True).start()
+        self.txt_email_output.delete("0.0", "end")
+        self.txt_email_output.insert("0.0", "Fetching inbox...")
+
+    def _email_send(self):
+        to = self.entry_email_to.get().strip()
+        subj = self.entry_email_subj.get().strip()
+        body = self.txt_email_body.get("0.0", "end").strip()
+        def task():
+            result = self.email_agent_v3.send_email(to, subj, body)
+            self.after(0, lambda: self._email_output(result))
+        threading.Thread(target=task, daemon=True).start()
+
+    def _email_output(self, text):
+        self.txt_email_output.delete("0.0", "end")
+        self.txt_email_output.insert("0.0", text)
+
+    def _calendar_connect(self):
+        def task():
+            result = self.calendar_agent_v3.authenticate()
+            self.after(0, lambda: self.txt_cal_output.insert("end", result + "\n"))
+        threading.Thread(target=task, daemon=True).start()
+
+    def _calendar_view(self):
+        def task():
+            result = self.calendar_agent_v3.get_upcoming_events(5)
+            self.after(0, lambda: self._cal_output(result))
+        threading.Thread(target=task, daemon=True).start()
+
+    def _calendar_create(self):
+        title = self.entry_cal_title.get().strip()
+        date = self.entry_cal_date.get().strip()
+        time_str = self.entry_cal_time.get().strip()
+        def task():
+            result = self.calendar_agent_v3.create_event(title, date, time_str)
+            self.after(0, lambda: self._cal_output(result))
+        threading.Thread(target=task, daemon=True).start()
+
+    def _cal_output(self, text):
+        self.txt_cal_output.delete("0.0", "end")
+        self.txt_cal_output.insert("0.0", text)
+
+    def _phone_connect(self):
+        sid = self.entry_twilio_sid.get().strip()
+        token = self.entry_twilio_token.get().strip()
+        frm = self.entry_twilio_from.get().strip()
+        def task():
+            result = self.call_agent_v3.configure(sid, token, frm)
+            color = "#00ff66" if "✅" in result else COLOR_ERROR
+            self.after(0, lambda: self.lbl_phone_status.configure(text=result[:80], text_color=color))
+        threading.Thread(target=task, daemon=True).start()
+
+    def _phone_call(self):
+        to = self.entry_phone_to.get().strip()
+        msg = self.entry_phone_msg.get().strip()
+        def task():
+            result = self.call_agent_v3.make_call(to, msg)
+            self.after(0, lambda: self.lbl_phone_status.configure(text=result[:100]))
+        threading.Thread(target=task, daemon=True).start()
+
+    def _phone_sms(self):
+        to = self.entry_phone_to.get().strip()
+        msg = self.entry_phone_msg.get().strip()
+        def task():
+            result = self.call_agent_v3.send_sms(to, msg)
+            self.after(0, lambda: self.lbl_phone_status.configure(text=result[:100]))
+        threading.Thread(target=task, daemon=True).start()
+
+    def _toggle_wake_word(self):
+        if self.wake_toggle.get():
+            result = self.wake_word_agent.start()
+            self.lbl_wake_status.configure(text="● ACTIVE — Say 'Hey Automater'", text_color="#00ffcc")
+            self.log(f">> WAKE WORD: {result}")
+        else:
+            self.wake_word_agent.stop()
+            self.lbl_wake_status.configure(text="● INACTIVE", text_color="gray")
+
+    def _on_wake_word(self):
+        """Called by WakeWordAgent when 'Hey Automater' is detected."""
+        self.after(0, self._focus_and_listen)
+
+    def _focus_and_listen(self):
+        self.lift()
+        self.focus_force()
+        self.select_tab("COMMAND CENTER")
+        self.log(">> 👂 WAKE WORD DETECTED! LISTENING FOR COMMAND...")
+        if self.voice_available and not self.is_listening:
+            self.toggle_listening()
+
     def _setup_whatsapp_tab(self):
         parent = self.tab_whatsapp
         parent.grid_columnconfigure(0, weight=1)
@@ -881,6 +1184,66 @@ class App(ctk.CTk):
         
         self.lbl_wa_status = ctk.CTkLabel(frame_main, text="READY", font=("Consolas", 11), text_color="gray")
         self.lbl_wa_status.pack(pady=10)
+
+        # --- AUTORESPONDER BOT ---
+        frame_bot = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10, border_color="#333", border_width=1)
+        frame_bot.pack(fill="x", padx=20, pady=(10, 20))
+        
+        ctk.CTkLabel(frame_bot, text="⚡ AI AUTO-RESPONDER BOT", font=("Consolas", 14, "bold"), text_color=COLOR_ACCENT).pack(anchor="w", padx=15, pady=(15, 5))
+        ctk.CTkLabel(frame_bot, text="BOT PERSONA / INSTRUCTIONS:", font=("Consolas", 11), text_color="gray").pack(anchor="w", padx=15)
+        
+        self.entry_wa_bot_prompt = ctk.CTkEntry(frame_bot, placeholder_text="e.g. My assistant. Tell them I am away and will reply later.", font=("Consolas", 12))
+        self.entry_wa_bot_prompt.pack(fill="x", padx=15, pady=(0, 10))
+        
+        row_bot = ctk.CTkFrame(frame_bot, fg_color="transparent")
+        row_bot.pack(fill="x", padx=15, pady=(5, 15))
+        
+        self.btn_wa_bot_start = ctk.CTkButton(row_bot, text="🚀 START AUTO-RESPONDER", command=self.start_wa_autoresponder, fg_color="#1DA851", hover_color="#25D366", text_color="black", font=("Consolas", 12, "bold"))
+        self.btn_wa_bot_start.pack(side="left", padx=(0, 10))
+        
+        self.btn_wa_bot_stop = ctk.CTkButton(row_bot, text="⛔ STOP", command=self.stop_wa_autoresponder, fg_color="#7a0000", hover_color="#cc0000", font=("Consolas", 11, "bold"), width=80, state="disabled")
+        self.btn_wa_bot_stop.pack(side="left")
+        
+        self.lbl_wa_bot_status = ctk.CTkLabel(row_bot, text="READY", font=("Consolas", 11), text_color="gray")
+        self.lbl_wa_bot_status.pack(side="left", padx=15)
+
+    def start_wa_autoresponder(self):
+        prompt = self.entry_wa_bot_prompt.get().strip()
+        if not prompt:
+            self.lbl_wa_bot_status.configure(text="ERROR: ENTER BOT INSTRUCTIONS", text_color=COLOR_ERROR)
+            return
+            
+        self.lbl_wa_bot_status.configure(text="STARTING...", text_color="yellow")
+        self.btn_wa_bot_start.configure(state="disabled")
+        self.btn_wa_bot_stop.configure(state="normal")
+        self.tts.speak("Starting WhatsApp auto responder")
+        
+        threading.Thread(target=self._wa_autoresponder_thread, args=(prompt,), daemon=True).start()
+
+    def stop_wa_autoresponder(self):
+        self.social_manager.stop_bot()
+        self.lbl_wa_bot_status.configure(text="STOP REQUESTED...", text_color="orange")
+        self.btn_wa_bot_stop.configure(state="disabled")
+
+    def _wa_autoresponder_thread(self, prompt):
+        def cb(msg):
+            self.after(0, lambda m=msg: self.lbl_wa_bot_status.configure(text=m[:60].upper(), text_color="yellow"))
+            self._bot_log(f"[WA BOT] {msg}")
+
+        try:
+            result = asyncio.run_coroutine_threadsafe(
+                self.social_manager.check_unread_whatsapp_messages(prompt, cb),
+                self.loop
+            ).result(timeout=3600)
+            
+            color = COLOR_SUCCESS if "finished" in result.lower() else COLOR_ACCENT
+            self.after(0, lambda: self.lbl_wa_bot_status.configure(text=result.upper(), text_color=color))
+            self.tts.speak("WhatsApp auto responder finished")
+        except Exception as e:
+            self.after(0, lambda: self.lbl_wa_bot_status.configure(text=f"ERROR: {e}", text_color=COLOR_ERROR))
+        finally:
+            self.after(0, lambda: self.btn_wa_bot_start.configure(state="normal"))
+            self.after(0, lambda: self.btn_wa_bot_stop.configure(state="disabled"))
 
     def execute_whatsapp(self, ai=False):
         target = self.entry_wa_target.get().strip()
@@ -1241,20 +1604,49 @@ class App(ctk.CTk):
             elif action == "wait_for_text":
                 await self.agent.wait_for_text(step.get("text"))
             elif action == "auto_message_whatsapp":
-                self.update_log_from_thread("STARTING DEDICATED WHATSAPP AUTOMATION...")
-                result = await self.social_manager.auto_message_whatsapp(step.get("target"), step.get("text"))
-                self.update_log_from_thread(f"WHATSAPP RESULT: {result}")
+                if self.godmode_checkbox.get():
+                    self.update_log_from_thread("CONVERTING WEB WHATSAPP MACRO TO PHYSICAL OS DESKTOP MACRO...")
+                    target = step.get("target", "")
+                    text_msg = step.get("text", "")
+                    
+                    self.os_agent.open_application("whatsapp")
+                    self.update_log_from_thread("Waiting for Desktop App to load...")
+                    await asyncio.sleep(5)
+                    
+                    self.update_log_from_thread(f"Searching for Contact: {target}")
+                    self.os_agent.keyboard_press("ctrl+f")
+                    await asyncio.sleep(0.5)
+                    self.os_agent.keyboard_type(target)
+                    await asyncio.sleep(2)
+                    
+                    self.os_agent.keyboard_press("enter")
+                    await asyncio.sleep(1)
+                    
+                    self.update_log_from_thread("Typing physical message...")
+                    self.os_agent.keyboard_type(text_msg)
+                    await asyncio.sleep(0.5)
+                    self.os_agent.keyboard_press("enter")
+                    self.update_log_from_thread("PHYSICAL O/S WHATSAPP MACRO COMPLETE.")
+                else:
+                    self.update_log_from_thread("STARTING DEDICATED BROWSER WHATSAPP AUTOMATION...")
+                    result = await self.social_manager.auto_message_whatsapp(step.get("target"), step.get("text"))
+                    self.update_log_from_thread(f"WHATSAPP RESULT: {result}")
             # --- OS CONTROL & FILE TOOLS ---
             elif action == "os_mouse_click" and self.godmode_checkbox.get():
-                self.os_agent.mouse_click(step.get("x"), step.get("y"), step.get("button", "left"))
+                res = self.os_agent.mouse_click(step.get("x"), step.get("y"), step.get("button", "left"))
+                self.update_log_from_thread(f"OS RESULT: {res}")
             elif action == "os_mouse_move" and self.godmode_checkbox.get():
-                self.os_agent.mouse_move(step.get("x"), step.get("y"))
+                res = self.os_agent.mouse_move(step.get("x"), step.get("y"))
+                self.update_log_from_thread(f"OS RESULT: {res}")
             elif action == "os_keyboard_type" and self.godmode_checkbox.get():
-                self.os_agent.keyboard_type(step.get("text"))
+                res = self.os_agent.keyboard_type(step.get("text"))
+                self.update_log_from_thread(f"OS RESULT: {res}")
             elif action == "os_keyboard_press" and self.godmode_checkbox.get():
-                self.os_agent.keyboard_press(step.get("key_combo"))
+                res = self.os_agent.keyboard_press(step.get("key_combo"))
+                self.update_log_from_thread(f"OS RESULT: {res}")
             elif action == "os_open_app" and self.godmode_checkbox.get():
-                self.os_agent.open_application(step.get("app_name_or_path"))
+                res = self.os_agent.open_application(step.get("app_name_or_path"))
+                self.update_log_from_thread(f"OS RESULT: {res}")
             elif action == "os_run_command" and self.godmode_checkbox.get():
                 import subprocess
                 cmd = step.get("command")
@@ -1397,6 +1789,40 @@ class App(ctk.CTk):
                     self.process_ai_command(command)
                 else:
                     self.process_command(command)
+
+    # --- Vision Auto-Monitor ---
+    def toggle_vision(self):
+        if self.vision_checkbox.get():
+            self.log(">> VISION AI DEPLOYED. MONITORING SCREEN...")
+            self.vision_agent.start()
+        else:
+            self.log(">> VISION AI STANDBY.")
+            self.vision_agent.stop()
+            
+    def show_vision_toast(self, message):
+        """Displays a non-blocking toast popup in the corner of the screen"""
+        self.after(0, lambda: self._create_toast(message))
+        
+    def _create_toast(self, message):
+        toast = ctk.CTkToplevel(self)
+        toast.title("Vision Alert")
+        toast.geometry("400x120-20-60") # Bottom right corner
+        toast.overrideredirect(True) # No window border
+        toast.attributes("-alpha", 0.95)
+        toast.attributes("-topmost", True)
+        toast.configure(fg_color="#0A192F") # Deep blue backing
+        
+        frame = ctk.CTkFrame(toast, border_width=2, border_color="#00ffcc", corner_radius=10, fg_color="transparent")
+        frame.pack(fill="both", expand=True, padx=2, pady=2)
+        
+        lbl_head = ctk.CTkLabel(frame, text="👁️ PROACTIVE AI SUGGESTION", font=("Consolas", 12, "bold"), text_color="#00ffcc")
+        lbl_head.pack(pady=(5, 0))
+        
+        lbl_msg = ctk.CTkLabel(frame, text=message, font=("Arial", 11), text_color="white", wraplength=380, justify="left")
+        lbl_msg.pack(padx=10, pady=5, fill="both", expand=True)
+        
+        # Auto-destroy after 10 seconds
+        self.after(10000, toast.destroy)
 
     # --- Auto-Pilot ---
     def stop_autopilot(self):

@@ -4,56 +4,83 @@ import traceback
 import os
 import subprocess
 from memory_manager import memory_store
+from memory_agent import MemoryAgent
+from document_indexer import DocumentIndexer
+from web_search_agent import WebSearchAgent
+from email_agent import EmailAgent
+from calendar_agent import CalendarAgent
+from call_agent import CallAgent
 
-# System prompt for the advanced agent
-AGENT_SYSTEM_PROMPT = """You are the Neural Automater Agentic Orchestrator. 
-You are an advanced, autonomous AI given a high-level user goal. 
-You have access to long-term memory and a suit of tools to accomplish this goal.
-
+BASE_JSON_FORMAT = """
 CRITICAL INSTRUCTION: You must respond ONLY with a valid JSON object matching the following structure exactly. 
 No markdown blocks, no conversational text before or after the JSON.
 
 {
-    "thought": "Your internal reasoning about what to do next based on the goal, context, and past actions.",
-    "plan": ["Step 1", "Step 2", "Step 3"],
-    "action": {
-        "tool": "tool_name",
-        "params": {
-            "param1": "value1"
-        }
-    },
+    "thought": "Your internal reasoning.",
+    "plan": ["Step 1", "Step 2"],
+    "action": {"tool": "tool_name", "params": {"param1": "value1"}},
     "completed": false,
-    "final_response": "If completed is true, write the final summary to the user here. Otherwise empty."
+    "final_response": "If completed is true, write the final summary here."
 }
+Your loop is: Think -> Plan -> Choose 1 Action -> Wait for result -> Repeat.
+"""
 
+SUPERVISOR_PROMPT = """You are the Supervisor Agent of the Neural Swarm.
+Your job is to break the user's goal into steps and DELEGATE them to appropriate specialists.
+When all steps are finished, report the final completion.
+Available Tools:
+1. `delegate_to_coder`: {"task": "Write python script or search files..."}
+2. `delegate_to_browser`: {"task": "Search google for weather..."}
+3. `delegate_to_os`: {"task": "Click the start menu..."}
+4. `ltm_memorize`: {"fact": "fact to remember"}
+5. `ltm_recall`: {"query": "Search long-term memory"}
+6. `email_get_unread`: {"n": 5}
+7. `email_send`: {"to": "...", "subject": "...", "body": "..."}
+8. `calendar_get_events`: {"n": 5}
+9. `calendar_create_event`: {"title": "...", "date": "YYYY-MM-DD", "start_time": "HH:MM"}
+10. `call_phone`: {"to_number": "+923001234567", "message": "spoken message"}
+11. `send_sms`: {"to_number": "+92...", "message": "text message"}
+12. `web_search`: {"query": "latest gold price"}
+13. `web_fetch_page`: {"url": "https://..."}
+14. `search_news`: {"query": "AI news today"}
+""" + BASE_JSON_FORMAT
+
+CODER_PROMPT = """You are the Coder Agent. 
+You specialize in reading, writing, and executing code and semantic RAG searches.
+Available Tools:
+1. `os_list_dir`: {"path": "C:/..."}
+2. `os_read_file`: {"path": "C:/..."}
+3. `os_write_file`: {"path": "C:/...", "content": "..."}
+4. `os_delete_file`: {"path": "C:/..."}
+5. `os_run_command`: {"command": "python script.py"}
+6. `rag_index_folder`: {"folder_path": "C:/..."}
+7. `rag_search`: {"query": "keywords to search"}
+""" + BASE_JSON_FORMAT
+
+BROWSER_PROMPT = """You are the Browser Agent.
+You specialize in navigating the web and scraping data using Playwright.
 Available Tools:
 1. `browser_navigate`: {"url": "https://..."}
 2. `browser_click`: {"selector": "CSS selector"}
-3. `browser_type`: {"selector": "CSS selector", "text": "text to type"}
-4. `browser_extract_text`: {"selector": "CSS selector or 'body' for all"}
-5. `browser_scroll`: {"direction": "down" or "up"}
-6. `memory_store`: {"category": "preference|fact|history", "key": "short_unique_key", "content": "information to remember"}
-7. `memory_retrieve`: {"key": "short_unique_key"}
-8. `social_post_twitter`: {"text": "The tweet content"}
-9. `ask_user`: {"question": "Question to ask the user if you are stuck"}
-10. `os_list_dir`: {"path": "C:/..."}
-11. `os_read_file`: {"path": "C:/..."}
-12. `os_write_file`: {"path": "C:/...", "content": "..."}
-13. `os_delete_file`: {"path": "C:/..."}
-14. `vault_store_password`: {"platform": "...", "username": "...", "password": "..."}
-15. `vault_retrieve_password`: {"platform": "..."}
-16. `vault_list_accounts`: {}
-17. `os_run_command`: {"command": "system command to execute"}
-18. `os_mouse_click`: {"x": 100, "y": 200, "button": "left"}
-19. `os_mouse_move`: {"x": 100, "y": 200}
-20. `os_keyboard_type`: {"text": "text to type"}
-21. `os_keyboard_press`: {"key_combo": "enter or ctrl+c"}
-22. `os_open_app`: {"app_name_or_path": "notepad"}
-23. `os_get_screen_info`: {}
+3. `browser_type`: {"selector": "CSS selector", "text": "text"}
+4. `browser_extract_text`: {"selector": "body"}
+5. `browser_scroll`: {"direction": "down"}
+6. `social_post_twitter`: {"text": "tweet text"}
+7. `web_search`: {"query": "search query"}
+8. `web_fetch_page`: {"url": "https://..."}
+9. `search_news`: {"query": "topic"}
+""" + BASE_JSON_FORMAT
 
-Your loop is: Think -> Plan -> Choose 1 Action -> Wait for result -> Repeat.
-If you have achieved the goal, set "completed": true, and provide the "final_response".
-"""
+OS_PROMPT = """You are the OS Agent.
+You specialize in physically controlling the user's mouse and keyboard in God Mode.
+Available Tools:
+1. `os_mouse_click`: {"x": 100, "y": 200, "button": "left"}
+2. `os_mouse_move`: {"x": 100, "y": 200}
+3. `os_keyboard_type`: {"text": "text"}
+4. `os_keyboard_press`: {"key_combo": "enter"}
+5. `os_open_app`: {"app_name_or_path": "notepad"}
+6. `os_get_screen_info`: {}
+""" + BASE_JSON_FORMAT
 
 class AgentOrchestrator:
     def __init__(self, llm_client, browser_agent, social_manager, config_manager=None, os_agent=None):
@@ -62,7 +89,14 @@ class AgentOrchestrator:
         self.social = social_manager
         self.cfg = config_manager
         self.os = os_agent
-        self.memory = memory_store
+        self.stm = memory_store  # Short term context
+        self.ltm = MemoryAgent() # Persistent Vector Space
+        self.rag = DocumentIndexer() # RAG Document Search
+        self.web = WebSearchAgent() # Real-time Web Search
+        self.email = EmailAgent()   # Gmail integration
+        self.calendar = CalendarAgent() # Google Calendar
+        self.calls = CallAgent()    # Twilio phone/SMS
+        
         
         self.is_running = False
         self.stop_requested = False
@@ -82,21 +116,23 @@ class AgentOrchestrator:
     async def execute_goal(self, goal: str):
         self.is_running = True
         self.stop_requested = False
-        step = 0
         
-        self._log_ui(f"INITIALIZING AGENT LOOP FOR GOAL: {goal}", "system")
+        self._log_ui(f"INITIALIZING NEURAL SWARM SUPERVISOR FOR GOAL: {goal}", "system")
         
-        # 1. Retrieve current memory context
-        mem_context = self.memory.get_all_summarized()
+        stm_context = self.stm.get_all_summarized()
+        ltm_facts = self.ltm.recall(goal, n_results=5)
+        ltm_context = "LONG-TERM MEMORY RELEVANT FACTS:\n" + "\n".join(ltm_facts) if ltm_facts else "No prior history available."
         
-        # 2. Start execution trace
-        execution_trace = [
-            {"role": "user", "content": f"GOAL: {goal}\n\n{mem_context}"}
-        ]
+        # Start top-level Supervisor loop
+        return await self._execute_sub_agent(SUPERVISOR_PROMPT, f"GOAL: {goal}\n\n{ltm_context}\n\nSHORT-TERM CONTEXT:\n{stm_context}", "SUPERVISOR")
 
-        while step < self.max_steps and not self.stop_requested:
+    async def _execute_sub_agent(self, system_prompt: str, task: str, role_name: str, max_steps: int = 15):
+        step = 0
+        execution_trace = [{"role": "user", "content": task}]
+
+        while step < max_steps and not self.stop_requested:
             step += 1
-            self._log_ui(f"--- STEP {step} ---", "system")
+            self._log_ui(f"--- [{role_name}] STEP {step} ---", "system")
             
             # Optionally grab a screenshot to attach if OS Agent or Browser is active
             screenshot = None
@@ -116,9 +152,9 @@ class AgentOrchestrator:
             for t in execution_trace:
                 trace_text += f"{t['role'].upper()}: {t['content']}\n"
                 
-            prompt = AGENT_SYSTEM_PROMPT + "\n\n" + trace_text + "\nWhat is your next JSON action?"
+            prompt = system_prompt + "\n\n" + trace_text + "\nWhat is your next JSON action?"
             
-            self._log_ui("Thinking...", "agent")
+            self._log_ui(f"{role_name} Thinking...", "agent")
             
             # Call LLM
             # Use interpret_command hack or directly call if we can
@@ -150,11 +186,11 @@ class AgentOrchestrator:
 
                 self._log_ui(f"THOUGHT: {thought}", "agent")
                 self._log_ui(f"PLAN: {plan}", "agent")
-                self.memory.log_interaction("agent", thought)
+                self.stm.log_interaction("agent", thought)
 
                 if completed:
                     self._log_ui(f"GOAL COMPLETED. AI SAYS: {final_response}", "success")
-                    self.memory.log_interaction("agent", f"COMPLETED: {final_response}")
+                    self.stm.log_interaction("agent", f"COMPLETED: {final_response}")
                     break
                     
                 tool_name = action.get("tool")
@@ -166,10 +202,22 @@ class AgentOrchestrator:
                     "content": f"THOUGHT: {thought}\nACTION: {tool_name}({json.dumps(tool_params)})"
                 })
                 
-                # Execute Tool
-                result = await self._execute_tool(tool_name, tool_params)
-                self._log_ui(f"RESULT: {str(result)[:500]}", "system")
-                self.memory.log_interaction("system", f"TOOL RESULT ({tool_name}): {str(result)[:200]}")
+                # Swarm Delegation Overrides
+                if tool_name == "delegate_to_coder":
+                    self._log_ui(f"Supervisor dispatching CoderAgent -> {tool_params.get('task')}", "action")
+                    result = await self._execute_sub_agent(CODER_PROMPT, tool_params.get('task'), "CODER", max_steps=10)
+                elif tool_name == "delegate_to_browser":
+                    self._log_ui(f"Supervisor dispatching BrowserAgent -> {tool_params.get('task')}", "action")
+                    result = await self._execute_sub_agent(BROWSER_PROMPT, tool_params.get('task'), "BROWSER", max_steps=10)
+                elif tool_name == "delegate_to_os":
+                    self._log_ui(f"Supervisor dispatching OSAgent -> {tool_params.get('task')}", "action")
+                    result = await self._execute_sub_agent(OS_PROMPT, tool_params.get('task'), "OS", max_steps=10)
+                else:
+                    # Normal Execute Tool
+                    result = await self._execute_tool(tool_name, tool_params)
+                    
+                self._log_ui(f"[{role_name}] RESULT: {str(result)[:500]}", "system")
+                self.stm.log_interaction("system", f"TOOL RESULT ({tool_name}): {str(result)[:200]}")
                 
                 execution_trace.append({
                     "role": "system",
@@ -186,11 +234,11 @@ class AgentOrchestrator:
                 
             await asyncio.sleep(2) # Breath between actions
 
-        if step >= self.max_steps:
-            self._log_ui("MAX STEPS REACHED. ABORTING.", "error")
+        if step >= max_steps:
+            self._log_ui(f"[{role_name}] MAX STEPS REACHED. ABORTING.", "error")
+            return f"Error: {role_name} failed to complete task within max steps."
             
-        self.is_running = False
-        return True
+        return "Internal abort."
 
     def stop(self):
         self.stop_requested = True
@@ -229,17 +277,16 @@ class AgentOrchestrator:
             await self.browser.scroll(0, y_offset)
             return f"Scrolled {direction}."
             
-        elif tool_name == "memory_store":
-            self.memory.store_memory(
-                category=params.get("category", "general"),
-                key=params.get("key"),
-                content=params.get("content")
-            )
-            return f"Stored memory for key: {params.get('key')}"
+        elif tool_name == "ltm_memorize":
+            fact = params.get("fact")
+            if not fact: return "Error: Missing fact parameter."
+            return self.ltm.memorize(fact, source="Agent Orchestrator")
             
-        elif tool_name == "memory_retrieve":
-            res = self.memory.retrieve_memory(params.get("key"))
-            return res if res else "Memory not found."
+        elif tool_name == "ltm_recall":
+            query = params.get("query")
+            if not query: return "Error: Missing query parameter."
+            facts = self.ltm.recall(query, n_results=3)
+            return "Found facts:\n" + "\n".join(facts) if facts else "No facts found."
             
         elif tool_name == "social_post_twitter":
             # Delegate to social manager
@@ -247,8 +294,47 @@ class AgentOrchestrator:
             res = await self.social.post_to_twitter(content_data)
             return res
             
+        elif tool_name == "rag_index_folder":
+            folder = params.get("folder_path")
+            if not folder: return "Error: Missing folder_path."
+            return self.rag.index_folder(folder)
+            
+        elif tool_name == "rag_search":
+            query = params.get("query")
+            if not query: return "Error: Missing query parameter."
+            return self.rag.search(query)
+            
+        # --- V3: Web Search ---
+        elif tool_name == "web_search":
+            return self.web.search(params.get("query", ""))
+        elif tool_name == "web_fetch_page":
+            return self.web.fetch_page_text(params.get("url", ""))
+        elif tool_name == "search_news":
+            return self.web.search_news(params.get("query", ""))
+
+        # --- V3: Email ---
+        elif tool_name == "email_get_unread":
+            return self.email.get_unread(int(params.get("n", 5)))
+        elif tool_name == "email_send":
+            return self.email.send_email(params.get("to", ""), params.get("subject", ""), params.get("body", ""))
+        elif tool_name == "email_search":
+            return self.email.search_emails(params.get("keyword", ""))
+
+        # --- V3: Calendar ---
+        elif tool_name == "calendar_get_events":
+            return self.calendar.get_upcoming_events(int(params.get("n", 5)))
+        elif tool_name == "calendar_create_event":
+            return self.calendar.create_event(params.get("title", "Meeting"), params.get("date", ""), params.get("start_time", "09:00"), params.get("end_time"), params.get("description", ""))
+        elif tool_name == "calendar_briefing":
+            return self.calendar.get_todays_briefing()
+
+        # --- V3: Phone/SMS ---
+        elif tool_name == "call_phone":
+            return self.calls.make_call(params.get("to_number", ""), params.get("message", ""))
+        elif tool_name == "send_sms":
+            return self.calls.send_sms(params.get("to_number", ""), params.get("message", ""))
+
         elif tool_name == "ask_user":
-            # For now, we simulate asking user by failing, or log to UI
             return "User says: Provide your best guess or skip."
             
         elif tool_name == "os_list_dir":

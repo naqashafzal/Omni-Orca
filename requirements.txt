@@ -1,15 +1,55 @@
-playwright
-pytest
-asyncio
-SpeechRecognition
-pyaudio
+# ============================================================
+# Neural Automater — Requirements
+# Install: pip install -r requirements.txt
+# Then: playwright install chromium
+# ============================================================
+
+# Core GUI
 customtkinter
 Pillow
+
+# Browser Automation
+playwright
+
+# AI / LLM Providers
 google-generativeai
-requests
+openai
+
+# Voice
+SpeechRecognition
+pyaudio          # Windows: pipwin install pyaudio
 pyttsx3
-schedule
+pvporcupine
+
+# Web & HTML
+requests
+beautifulsoup4
+duckduckgo-search
+
+# Data
 pandas
-cryptography
-python-binance
 numpy
+schedule
+
+# Email & Calendar
+google-auth
+google-auth-oauthlib
+google-api-python-client
+
+# Phone / SMS
+twilio
+
+# Trading
+python-binance
+
+# Memory & RAG (V2)
+chromadb
+PyPDF2
+python-docx
+sentence-transformers
+
+# File Auth
+cryptography
+
+# Utilities
+python-dotenv

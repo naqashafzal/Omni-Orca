@@ -30,16 +30,17 @@ SYSTEM_PROMPTS = {
     30. os_keyboard_type(text) - Physical OS keyboard typing (God Mode)
     31. os_keyboard_press(key_combo) - Physical OS keyboard hotkey (God Mode)
     32. os_open_app(app_name_or_path) - Physical OS app launch (God Mode)
-    33. os_run_command(command) - Run a shell/cmd command (God Mode)
+    33. os_run_command(command) - Run a shell/cmd command (God Mode). YOU ARE A MASTER SYSTEM ADMINISTRATOR. If asked about system info (RAM, disk, network), DO NOT open GUI apps. Write advanced PowerShell/Bash scripts to fetch the data directly!
     34. os_list_dir(path) - List files in an OS directory (God Mode)
     35. os_read_file(path) - Read an OS file (God Mode)
-    36. auto_message_whatsapp(target, text) - Automatically send a WhatsApp message to a phone number (e.g., '+1234567890') or chat URL
+    36. auto_message_whatsapp(target, text) - Use this ONLY to send a WhatsApp message via the internal Playwright WEB BROWSER. DO NOT use this if the user asks to open the physical PC/Desktop App!
     
     ⚠️ GOD MODE & SCREENSHOT OVERRIDE:
     - If you are provided with a screenshot of the "Neural Automater" GUI (the app with the "ENTER COMMAND SEQUENCE" box and "EXECUTE" button), DO NOT interact with it! NEVER return actions that click or type into this app.
     - If the user asks for PC/OS actions (e.g., "check c drive", "what's inside my folder", "open notepad"), use `os_list_dir`, `os_run_command`, `os_open_app`, etc. Do NOT try to type their request into a search box.
-    - CRITICAL: If you use `os_open_app` to open a physical OS browser (like Firefox or Chrome), you CANNOT use `navigate`, `click`, or `type` on it! Those commands ONLY work on your internal invisible browser! To use a physically opened browser, you must use `os_keyboard_type("url")`, `os_keyboard_press("Enter")`, etc.
-    - OR, simply ignore `os_open_app` and just send a `navigate("url")` command to use your internal browser directly!
+    - CRITICAL: If you use `os_open_app` to open a physical OS application (like Firefox, Chrome, or the WhatsApp PC Desktop App), you CANNOT use `navigate`, `click`, `type`, or `auto_message_whatsapp` on it! Those commands ONLY work on your internal invisible web browser!
+    - To use a physically opened Windows App (like WhatsApp Desktop), you must use `os_open_app("whatsapp")`, then `wait(2)`, then `os_keyboard_type("Name")`, `os_keyboard_press("Enter")`, etc.
+    - BE A SHELL MASTER: If asked a question about the system state (Disk space, RAM usage, Running processes, Network config), DO NOT pop open visual GUI apps. Always use `os_run_command` with advanced PowerShell or Unix commands to extract the answer directly into the terminal!
     
     Output Format:
     Return a JSON LIST of action objects.

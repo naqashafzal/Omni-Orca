@@ -1,29 +1,4 @@
-2026/03/27-23:44:50.689 2050 Reusing MANIFEST C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/03/27-23:44:50.690 2050 Recovering log #288
-2026/03/27-23:44:50.745 2050 Reusing old log C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000288.log 
-2026/03/27-23:44:52.479 7b4c Level-0 table #300: started
-2026/03/27-23:44:52.535 7b4c Level-0 table #300: 787028 bytes OK
-2026/03/27-23:44:52.537 7b4c Delete type=0 #288
-2026/03/27-23:44:52.538 7b4c Manual compaction at level-0 from '\x00\x1c\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x1d\x00\x00\x00' @ 0 : 0; will stop at (end)
-2026/03/27-23:44:52.619 2050 Compacting 1@1 + 10@2 files
-2026/03/27-23:44:52.692 2050 Generated table #301@1: 52065 keys, 2206903 bytes
-2026/03/27-23:44:52.780 2050 Generated table #302@1: 34682 keys, 2204398 bytes
-2026/03/27-23:44:52.859 2050 Generated table #303@1: 55843 keys, 2219600 bytes
-2026/03/27-23:44:52.904 2050 Generated table #304@1: 18983 keys, 2169650 bytes
-2026/03/27-23:44:52.930 2050 Generated table #305@1: 1153 keys, 2138041 bytes
-2026/03/27-23:44:52.969 2050 Generated table #306@1: 6527 keys, 2160076 bytes
-2026/03/27-23:44:53.057 2050 Generated table #307@1: 30547 keys, 2248227 bytes
-2026/03/27-23:44:53.111 2050 Generated table #308@1: 36087 keys, 927175 bytes
-2026/03/27-23:44:53.111 2050 Compacted 1@1 + 10@2 files => 16274070 bytes
-2026/03/27-23:44:53.112 2050 compacted to: files[ 0 0 8 0 0 0 0 ]
-2026/03/27-23:44:53.113 2050 Delete type=2 #277
-2026/03/27-23:44:53.113 2050 Delete type=2 #287
-2026/03/27-23:44:53.113 2050 Delete type=2 #290
-2026/03/27-23:44:53.113 2050 Delete type=2 #291
-2026/03/27-23:44:53.114 2050 Delete type=2 #292
-2026/03/27-23:44:53.114 2050 Delete type=2 #293
-2026/03/27-23:44:53.114 2050 Delete type=2 #294
-2026/03/27-23:44:53.114 2050 Delete type=2 #295
-2026/03/27-23:44:53.114 2050 Delete type=2 #296
-2026/03/27-23:44:53.114 2050 Delete type=2 #297
-2026/03/27-23:44:53.114 2050 Delete type=2 #300
+2026/03/28-14:49:53.507 45a0 Reusing MANIFEST C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/03/28-14:49:53.508 45a0 Recovering log #354
+2026/03/28-14:49:53.518 45a0 Reusing old log C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000354.log 
+2026/03/28-14:49:55.249 6bb0 Manual compaction at level-0 from '\x00"\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00#\x00\x00\x00' @ 0 : 0; will stop at (end)

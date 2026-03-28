@@ -189,9 +189,12 @@ class SocialMediaManager:
             search_url = f"https://x.com/search?q={kw.strip().replace(' ', '%20')}&f=live"
             try:
                 await self.browser.navigate(search_url)
-                await asyncio.sleep(1.5)
+                # Twitter is heavy and uses React client-side rendering. Wait for tweets to appear.
+                cb("⏳ Waiting for X/Twitter to load search results...")
+                await self.browser.page.wait_for_selector("article", timeout=15000)
+                await asyncio.sleep(2)
             except Exception as e:
-                cb(f"⚠️ Navigation error: {e}")
+                cb(f"⚠️ Navigation/Load error: {e}")
                 continue
 
             # Collect unique tweet URLs not yet processed
@@ -491,6 +494,233 @@ class SocialMediaManager:
             return "✅ Message sent on WhatsApp successfully."
         except Exception as e:
             return f"Error messaging on WhatsApp: {e}"
+
+    async def check_unread_whatsapp_messages(self, prompt_context: str, progress_callback=None, max_replies=5):
+        """Scans WhatsApp Web for unread messages and uses the LLM to reply to them autonomously."""
+        def cb(msg):
+            if progress_callback: progress_callback(msg)
+            
+        if not self.browser.page:
+            await self.browser.start()
+            
+        self.reset_stop()
+        
+        cb("🌐 Opening WhatsApp Web...")
+        await self.browser.navigate("https://web.whatsapp.com", wait_until="domcontentloaded")
+        
+        cb("⏳ Waiting for WhatsApp to sync chats (this could take 10-30s)...")
+        try:
+            # chat list container or search
+            await self.browser.page.wait_for_selector("div[data-testid='chat-list-search']", timeout=30000)
+        except Exception:
+            cb("⚠️ Timeout waiting for chat list. Make sure you are logged in via Accounts tab!")
+            return "Timeout checking messages."
+            
+        await asyncio.sleep(2)
+        replies_sent = 0
+        
+        for _ in range(max_replies):
+            if self._stop_bot:
+                cb("⏹ Autoresponder stopped by user.")
+                break
+                
+            cb("🔍 Scanning for unread badges...")
+            # Common selectors for WhatsApp unread badges
+            unread_selectors = [
+                "span[aria-label*='unread message']",
+                "div[aria-label*='unread message']",
+                "span[aria-label*='Unread']",
+                "span[aria-label*='unread']"
+            ]
+            
+            unread_element = None
+            for sel in unread_selectors:
+                elements = await self.browser.page.query_selector_all(sel)
+                if elements:
+                    unread_element = elements[0]
+                    break
+                    
+            if not unread_element:
+                cb("✅ No more unread messages found.")
+                break
+                
+            cb("📩 Found an unread chat. Opening it...")
+            await unread_element.click()
+            await asyncio.sleep(2)
+            
+            cb("👀 Reading recent messages...")
+            msg_elements = await self.browser.page.query_selector_all("div[data-testid='msg-container']")
+            
+            chat_history = ""
+            if msg_elements:
+                recent_msgs = msg_elements[-5:] 
+                for el in recent_msgs:
+                    text = await el.inner_text()
+                    chat_history += f"Message: {text}\n"
+            else:
+                chat_history = "Could not extract message text."
+                
+            cb("🧠 Generating AI reply...")
+            ai_prompt = (
+                "You are an AI assistant managing the user's WhatsApp.\n"
+                f"User Instructions: {prompt_context}\n\n"
+                f"Recent Messages in this chat:\n{chat_history}\n\n"
+                "Write a short, natural, conversational reply. ONLY output the message text to send. No quotes."
+            )
+            reply_text = self.llm.generate_text(ai_prompt)
+            
+            if not reply_text or "Error" in reply_text:
+                cb("⚠️ AI failed to generate a reply. Skipping.")
+                continue
+                
+            cb(f"✍️ Typing reply: {reply_text[:20]}...")
+            
+            box_selectors = [
+                 "div[title='Type a message']",
+                 "div[aria-label='Type a message']",
+                 "div[contenteditable='true'][data-tab='10']",
+                 "div[contenteditable='true'][data-tab='1']"
+            ]
+            
+            clicked = False
+            for sel in box_selectors:
+                if await self.browser.page.is_visible(sel):
+                    await self.browser.page.click(sel)
+                    clicked = True
+                    break
+                    
+            if not clicked:
+                cb("⚠️ Could not find the text input box. Skipping chat.")
+                continue
+                
+            await self.browser.page.keyboard.type(reply_text, delay=20)
+            await asyncio.sleep(0.5)
+            await self.browser.page.keyboard.press("Enter")
+            
+            cb("✅ Sent!")
+            replies_sent += 1
+            await asyncio.sleep(3)
+            
+        return f"Autoresponder finished. Replied to {replies_sent} chats. (Or hit max limit)"
+
+    async def check_unread_whatsapp_messages(self, prompt_context: str, progress_callback=None, max_replies=5):
+        """Scans WhatsApp Web for unread messages and uses the LLM to reply to them autonomously."""
+        def cb(msg):
+            if progress_callback: progress_callback(msg)
+            
+        if not self.browser.page:
+            await self.browser.start()
+            
+        self.reset_stop()
+        
+        cb("🌐 Opening WhatsApp Web...")
+        await self.browser.navigate("https://web.whatsapp.com", wait_until="domcontentloaded")
+        
+        cb("⏳ Waiting for WhatsApp to sync chats (this could take 10-30s)...")
+        try:
+            # WhatsApp frequently rotates its DOM. We wait for any of these standard chat-list indicators.
+            await self.browser.page.wait_for_selector("div#pane-side, div[data-testid='chat-list-search'], div[aria-label*='Search']", timeout=30000)
+        except Exception:
+            cb("⚠️ Timeout waiting for chat list. Make sure you are logged in via Accounts tab!")
+            return "Timeout checking messages."
+            
+        await asyncio.sleep(2)
+        replies_sent = 0
+        
+        for _ in range(max_replies):
+            if self._stop_bot:
+                cb("⏹ Autoresponder stopped by user.")
+                break
+                
+            cb("🔍 Scanning for unread badges...")
+            # Advanced Playwright selectors: We look for the entire chat row that contains ANY element with an "unread" aria-label
+            # This perfectly bypasses WhatsApp's random class/span changes
+            unread_selectors = [
+                "div[role='row']:has(*[aria-label*='unread message' i])",
+                "div[role='row']:has(*[aria-label*='unread' i])",
+                "div[role='listitem']:has(*[aria-label*='unread' i])",
+                "#pane-side *[aria-label*='unread message' i]",
+                "#pane-side *[aria-label*='unread' i]"
+            ]
+            
+            unread_element = None
+            for sel in unread_selectors:
+                elements = await self.browser.page.query_selector_all(sel)
+                if elements:
+                    unread_element = elements[0]
+                    break
+                    
+            if not unread_element:
+                cb("✅ No more unread messages found.")
+                break
+                
+            cb("📩 Found an unread chat. Opening it...")
+            await unread_element.click()
+            await asyncio.sleep(2)
+            
+            cb("👀 Reading recent messages...")
+            # More resilient selector for WhatsApp messages:
+            # We look specifically inside the main chat view (#main) for rows.
+            # .copyable-text[data-pre-plain-text] holds the sender, time, and message payload universally.
+            msg_elements = await self.browser.page.query_selector_all("#main div.copyable-text[data-pre-plain-text], #main div[role='row'] span.selectable-text")
+            
+            chat_history = ""
+            if msg_elements:
+                # Grab the last 5 visible text blocks
+                recent_msgs = msg_elements[-5:] 
+                for el in recent_msgs:
+                    try:
+                        text = await el.inner_text()
+                        if text and len(text.strip()) > 0:
+                            chat_history += f"[{text.strip()}]\n"
+                    except Exception:
+                        pass
+            
+            if not chat_history.strip():
+                chat_history = "User sent an image/video, or message text could not be extracted."
+                
+            cb("🧠 Generating AI reply...")
+            ai_prompt = (
+                "You are an AI assistant managing the user's WhatsApp.\n"
+                f"User Instructions: {prompt_context}\n\n"
+                f"Recent Messages in this chat:\n{chat_history}\n\n"
+                "Write a short, natural, conversational reply. ONLY output the message text to send. No quotes."
+            )
+            reply_text = self.llm.generate_text(ai_prompt)
+            
+            if not reply_text or "Error" in reply_text:
+                cb("⚠️ AI failed to generate a reply. Skipping.")
+                continue
+                
+            cb(f"✍️ Typing reply: {reply_text[:20]}...")
+            
+            box_selectors = [
+                 "div[title='Type a message']",
+                 "div[aria-label='Type a message']",
+                 "div[contenteditable='true'][data-tab='10']",
+                 "div[contenteditable='true'][data-tab='1']"
+            ]
+            
+            clicked = False
+            for sel in box_selectors:
+                if await self.browser.page.is_visible(sel):
+                    await self.browser.page.click(sel)
+                    clicked = True
+                    break
+                    
+            if not clicked:
+                cb("⚠️ Could not find the text input box. Skipping chat.")
+                continue
+                
+            await self.browser.page.keyboard.type(reply_text, delay=20)
+            await asyncio.sleep(0.5)
+            await self.browser.page.keyboard.press("Enter")
+            
+            cb("✅ Sent!")
+            replies_sent += 1
+            await asyncio.sleep(3)
+            
+        return f"Autoresponder finished. Replied to {replies_sent} chats."
 
     # ─────────────────────────────────────────────
     # Content / Trends methods

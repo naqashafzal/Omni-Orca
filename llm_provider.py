@@ -182,26 +182,32 @@ class OllamaProvider(LLMProvider):
         self.prompts = SYSTEM_PROMPTS
 
     def _call_ollama(self, prompt, image_base64=None):
-        """Call Ollama API using chat endpoint"""
-        url = f"{self.base_url}/api/chat"
-
-        messages = [{"role": "user", "content": prompt}]
-        if image_base64:
-            messages[0]["images"] = [image_base64]
+        """Call Ollama API using generate endpoint for broader compatibility"""
+        url = f"{self.base_url}/api/generate"
 
         payload = {
             "model": self.model_name,
-            "messages": messages,
+            "prompt": prompt,
             "stream": False,
             "format": "json"
         }
+        
+        if image_base64:
+            payload["images"] = [image_base64]
 
         try:
             response = requests.post(url, json=payload, timeout=600)
             response.raise_for_status()
             result = response.json()
-            message = result.get("message", {})
-            return message.get("content", "")
+            return result.get("response", "")
+        except requests.exceptions.HTTPError as e:
+            try:
+                err_detail = e.response.json().get("error", "")
+                if err_detail:
+                    return {"error": f"Ollama Error: {err_detail} (Did you download the model? Try 'ollama run {self.model_name}')"}
+            except Exception:
+                pass
+            return {"error": f"Ollama HTTP Error: {str(e)}"}
         except requests.exceptions.ConnectionError:
             return {"error": "Cannot connect to Ollama. Is it running?"}
         except requests.exceptions.Timeout:
@@ -211,18 +217,25 @@ class OllamaProvider(LLMProvider):
 
     def generate_text(self, prompt: str) -> str:
         """Generate plain text using Ollama (without JSON format)."""
-        url = f"{self.base_url}/api/chat"
-        messages = [{"role": "user", "content": prompt}]
+        url = f"{self.base_url}/api/generate"
         payload = {
             "model": self.model_name,
-            "messages": messages,
+            "prompt": prompt,
             "stream": False
         }
         try:
             response = requests.post(url, json=payload, timeout=300)
             response.raise_for_status()
             result = response.json()
-            return result.get("message", {}).get("content", "").strip()
+            return result.get("response", "").strip()
+        except requests.exceptions.HTTPError as e:
+            try:
+                err_detail = e.response.json().get("error", "")
+                if err_detail:
+                    return f"[Ollama Error: {err_detail} - Did you pull the model?]"
+            except Exception:
+                pass
+            return f"[Ollama HTTP Error: {str(e)}]"
         except Exception as e:
             return f"[Ollama Error: {e}]"
 
