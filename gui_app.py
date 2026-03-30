@@ -175,6 +175,18 @@ class App(ctk.CTk):
         self.main_content_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.main_content_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
 
+        # Pre-process a 20% opacity watermark image for tab backgrounds
+        self.watermark_img = None
+        try:
+            pil_img = Image.open("omni_logo.png").convert("RGBA")
+            alpha = pil_img.split()[3]
+            alpha = alpha.point(lambda p: int(p * 0.20))  # 20% opacity
+            pil_img.putalpha(alpha)
+            # Make it beautifully large in the center
+            self.watermark_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(350, 350))
+        except Exception as e:
+            pass
+
         # Tab Router
         self.tabs = {}
         
@@ -211,6 +223,12 @@ class App(ctk.CTk):
             )
             btn.pack(fill="x", padx=8, pady=1)
             frame = ctk.CTkFrame(self.main_content_frame, corner_radius=0, fg_color="transparent")
+            
+            # Inject centered watermark behind everything
+            if self.watermark_img:
+                wm_lbl = ctk.CTkLabel(frame, image=self.watermark_img, text="")
+                wm_lbl.place(relx=0.5, rely=0.5, anchor="center")
+                
             self.tabs[name] = {"button": btn, "frame": frame}
             return frame
 
@@ -227,20 +245,51 @@ class App(ctk.CTk):
         self.tab_biz = add_tab("BIZ SCRAPER")
         self.tab_settings = add_tab("SYSTEM SETTINGS")
 
-        # ── Sidebar Footer ───────────────────────────────────────────
-        ctk.CTkFrame(self.sidebar_frame, height=1, fg_color=COLOR_BORDER).pack(fill="x", padx=12, pady=(12, 4), side="bottom")
+        # ── Sidebar Footer (Credits & Logo) ──────────────────────────
+        footer_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        footer_frame.pack(side="bottom", fill="x", pady=(10, 15))
+
+        ctk.CTkFrame(footer_frame, height=1, fg_color=COLOR_BORDER).pack(fill="x", padx=15, pady=(0, 15))
+
+        # Try to load and display the OMNI logo (Made Bigger)
+        try:
+            logo_img = ctk.CTkImage(light_image=Image.open("omni_logo.png"), dark_image=Image.open("omni_logo.png"), size=(85, 85))
+            logo_lbl = ctk.CTkLabel(footer_frame, image=logo_img, text="")
+            logo_lbl.pack(pady=(0, 10))
+        except Exception as e:
+            pass # Skip if image not generated yet
+
         ctk.CTkLabel(
-            self.sidebar_frame,
-            text="● SYSTEM ONLINE",
+            footer_frame,
+            text="PROJECT BY ORCA",
+            font=("Consolas", 10, "bold"),
+            text_color=COLOR_ACCENT
+        ).pack()
+
+        ctk.CTkLabel(
+            footer_frame,
+            text="Author: Naqash Afzal",
+            font=("Consolas", 9),
+            text_color=COLOR_TEXT
+        ).pack()
+
+        # Clickable GitHub link
+        github_lbl = ctk.CTkLabel(
+            footer_frame,
+            text="github.com/naqashafzal",
+            font=("Consolas", 9, "underline"),
+            text_color=COLOR_TEXT_DIM,
+            cursor="hand2"
+        )
+        github_lbl.pack(pady=(2, 8))
+        github_lbl.bind("<Button-1>", lambda e: __import__('webbrowser').open("https://github.com/naqashafzal"))
+
+        ctk.CTkLabel(
+            footer_frame,
+            text="● OMNI SYSTEM v3.0 ONLINE",
             font=("Consolas", 9),
             text_color=COLOR_SUCCESS
-        ).pack(side="bottom", pady=(0, 4))
-        ctk.CTkLabel(
-            self.sidebar_frame,
-            text="OMNI SYSTEM  v3.0",
-            font=("Consolas", 9),
-            text_color=COLOR_TEXT_DIM
-        ).pack(side="bottom", pady=0)
+        ).pack()
 
 
         # Initialize trading system
