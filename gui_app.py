@@ -27,28 +27,35 @@ from calendar_agent import CalendarAgent
 from call_agent import CallAgent
 from wake_word_agent import WakeWordAgent
 from web_search_agent import WebSearchAgent
+from business_scraper import BusinessScraper
 
 
-# --- Theme Configuration ---
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("dark-blue")
-
-# Futuristic Palette
-COLOR_BG = "#0f0f0f"        
-COLOR_PANEL = "#1a1a1a"     
-COLOR_ACCENT = "#00e5ff"    
-COLOR_ACCENT_HOVER = "#00b8cc"
-COLOR_TEXT = "#ffffff"
-COLOR_LOG = "#2b2b2b"
-COLOR_ERROR = "#ff3333"
-COLOR_SUCCESS = "#00ff66"
+# ═══════════════════════════════════════════
+# ELITE DARK THEME  —  Neural Omni V3
+# ═══════════════════════════════════════════
+COLOR_BG         = "#050508"   # Void black
+COLOR_SIDEBAR    = "#0a0a12"   # Deep midnight
+COLOR_PANEL      = "#0e0e1a"   # Dark navy card
+COLOR_PANEL2     = "#131325"   # Slightly lighter card
+COLOR_ACCENT     = "#00f0ff"   # Electric cyan
+COLOR_ACCENT_HOVER = "#00c8d4" # Cyan hover
+COLOR_GOLD       = "#ffc857"   # Gold metallic
+COLOR_GOLD2      = "#e0a030"   # Deep gold
+COLOR_BORDER     = "#1e1e38"   # Subtle border
+COLOR_TEXT       = "#e8eaf6"   # Soft white
+COLOR_TEXT_DIM   = "#5c6082"   # Dimmed text
+COLOR_LOG        = "#070710"   # Terminal black
+COLOR_ERROR      = "#ff4466"   # Hot pink error
+COLOR_SUCCESS    = "#00ff99"   # Matrix green
+COLOR_WARN       = "#ffaa00"   # Amber warning
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("A U T O M A T E R  //  V 1 . 1")
-        self.geometry("950x750")
+        self.title("OMNI  //  AGI EDITION  v3.0")
+        self.geometry("1100x800")
+        self.minsize(900, 650)
         self.configure(fg_color=COLOR_BG)
 
         self.cfg = ConfigManager()
@@ -79,6 +86,11 @@ class App(ctk.CTk):
         self.wake_word_agent = WakeWordAgent(on_activated_callback=self._on_wake_word)
         self.tts = TTSEngine()
         self.tts.speak("System Initialized")
+        self.biz_scraper = BusinessScraper(
+            self.agent, self.llm,
+            log_callback=lambda msg: self.after(0, lambda m=msg: self._biz_log(m))
+        )
+        self._biz_results = []  # Cache for last scrape results
         
         # Scheduler Thread
         self.scheduler_running = True
@@ -114,12 +126,50 @@ class App(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
 
         # --- SIDEBAR ---
-        self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
+        self.sidebar_frame = ctk.CTkFrame(
+            self, width=230, corner_radius=0,
+            fg_color=COLOR_SIDEBAR,
+            border_color=COLOR_BORDER, border_width=1
+        )
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(15, weight=1)
+        self.sidebar_frame.grid_propagate(False)
 
-        logo_label = ctk.CTkLabel(self.sidebar_frame, text="NEURAL\nAUTOMATER", font=ctk.CTkFont(size=22, weight="bold"), text_color="#25D366")
-        logo_label.pack(pady=(30, 20))
+        # ── Logo Block ──────────────────────────────────────
+        logo_block = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        logo_block.pack(pady=(28, 0), padx=15, fill="x")
+
+        ctk.CTkLabel(
+            logo_block,
+            text="P R O J E C T",
+            font=ctk.CTkFont(family="Consolas", size=13, weight="bold"),
+            text_color=COLOR_TEXT_DIM
+        ).pack(anchor="w")
+
+        ctk.CTkLabel(
+            logo_block,
+            text="O M N I",
+            font=ctk.CTkFont(family="Consolas", size=26, weight="bold"),
+            text_color=COLOR_ACCENT
+        ).pack(anchor="w")
+
+        ctk.CTkLabel(
+            logo_block,
+            text="AGI  EDITION",
+            font=ctk.CTkFont(family="Consolas", size=10),
+            text_color=COLOR_GOLD
+        ).pack(anchor="w")
+
+        # Gold separator line
+        sep = ctk.CTkFrame(self.sidebar_frame, height=1, fg_color=COLOR_GOLD2)
+        sep.pack(fill="x", padx=12, pady=(10, 8))
+
+        ctk.CTkLabel(
+            self.sidebar_frame,
+            text="  NAVIGATION",
+            font=("Consolas", 9),
+            text_color=COLOR_TEXT_DIM
+        ).pack(anchor="w", padx=10, pady=(2, 4))
 
         # --- MAIN CONTENT FLUID ---
         self.main_content_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -128,21 +178,38 @@ class App(ctk.CTk):
         # Tab Router
         self.tabs = {}
         
+        # Tab Icons mapping
+        TAB_ICONS = {
+            "COMMAND CENTER":   "⚡",
+            "NEURAL CHAT":      "🧠",
+            "SCHEDULER":        "🕐",
+            "ACCOUNTS":         "🔑",
+            "SOCIAL MEDIA PRO": "🐦",
+            "WHATSAPP PRO":     "💬",
+            "COMMUNICATIONS":   "📡",
+            "DATA LAB":         "📊",
+            "CRYPTO TRADER":    "₿",
+            "AGENT LAB":        "🤖",
+            "BIZ SCRAPER":      "🗂️",
+            "SYSTEM SETTINGS":  "⚙️",
+        }
+
         def add_tab(name):
+            icon = TAB_ICONS.get(name, "›")
             btn = ctk.CTkButton(
-                self.sidebar_frame, 
-                corner_radius=0, 
-                height=40, 
-                border_spacing=10, 
-                text=name, 
-                fg_color="transparent", 
-                text_color=("gray10", "gray90"), 
-                hover_color=("gray70", "gray30"),
-                anchor="w", 
-                font=("Consolas", 13, "bold"),
+                self.sidebar_frame,
+                corner_radius=6,
+                height=36,
+                border_spacing=10,
+                text=f"  {icon}  {name}",
+                fg_color="transparent",
+                text_color=COLOR_TEXT_DIM,
+                hover_color=COLOR_PANEL2,
+                anchor="w",
+                font=("Consolas", 12, "bold"),
                 command=lambda n=name: self.select_tab(n)
             )
-            btn.pack(fill="x")
+            btn.pack(fill="x", padx=8, pady=1)
             frame = ctk.CTkFrame(self.main_content_frame, corner_radius=0, fg_color="transparent")
             self.tabs[name] = {"button": btn, "frame": frame}
             return frame
@@ -157,7 +224,23 @@ class App(ctk.CTk):
         self.tab_data = add_tab("DATA LAB")
         self.tab_crypto = add_tab("CRYPTO TRADER")
         self.tab_agent = add_tab("AGENT LAB")
+        self.tab_biz = add_tab("BIZ SCRAPER")
         self.tab_settings = add_tab("SYSTEM SETTINGS")
+
+        # ── Sidebar Footer ───────────────────────────────────────────
+        ctk.CTkFrame(self.sidebar_frame, height=1, fg_color=COLOR_BORDER).pack(fill="x", padx=12, pady=(12, 4), side="bottom")
+        ctk.CTkLabel(
+            self.sidebar_frame,
+            text="● SYSTEM ONLINE",
+            font=("Consolas", 9),
+            text_color=COLOR_SUCCESS
+        ).pack(side="bottom", pady=(0, 4))
+        ctk.CTkLabel(
+            self.sidebar_frame,
+            text="OMNI SYSTEM  v3.0",
+            font=("Consolas", 9),
+            text_color=COLOR_TEXT_DIM
+        ).pack(side="bottom", pady=0)
 
 
         # Initialize trading system
@@ -178,6 +261,7 @@ class App(ctk.CTk):
         self._setup_data_tab()
         self._setup_crypto_tab()
         self._setup_agent_tab()
+        self._setup_biz_scraper_tab()
         self._setup_settings_tab()
 
         self.log(">> SYSTEM INITIALIZED...")
@@ -190,28 +274,47 @@ class App(ctk.CTk):
         self.select_tab("COMMAND CENTER")
 
     def select_tab(self, name):
-        """Route sidebar click to show the corresponding frame"""
+        """Route sidebar click to show the corresponding frame with elite highlight"""
         for tab_name, data in self.tabs.items():
             if tab_name == name:
                 data["frame"].pack(fill="both", expand=True)
-                data["button"].configure(fg_color=("gray75", "gray25"), text_color=COLOR_ACCENT)
+                data["button"].configure(
+                    fg_color=COLOR_PANEL2,
+                    text_color=COLOR_ACCENT,
+                    border_color=COLOR_ACCENT,
+                    border_width=1
+                )
             else:
                 data["frame"].pack_forget()
-                data["button"].configure(fg_color="transparent", text_color=("gray10", "gray90"))
+                data["button"].configure(
+                    fg_color="transparent",
+                    text_color=COLOR_TEXT_DIM,
+                    border_color=COLOR_SIDEBAR,
+                    border_width=0
+                )
 
     def _setup_command_tab(self):
         parent = self.tab_cmd
         parent.grid_columnconfigure(0, weight=1)
         parent.grid_rowconfigure(2, weight=1)
 
-        # 1. Header is technically the tab title, but we can add a sub-header
-        self.label_title = ctk.CTkLabel(
-            parent, 
-            text="A U T O M A TE R   N E U R A L   L I N K", 
-            font=ctk.CTkFont(family="Consolas", size=20, weight="bold"),
+        # 1. Elite Header
+        header = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10, border_color=COLOR_BORDER, border_width=1)
+        header.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        header.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            header,
+            text="⚡ PROJECT OMNI",
+            font=ctk.CTkFont(family="Consolas", size=22, weight="bold"),
             text_color=COLOR_ACCENT
-        )
-        self.label_title.grid(row=0, column=0, pady=10)
+        ).grid(row=0, column=0, sticky="w", padx=20, pady=12)
+
+        status_block = ctk.CTkFrame(header, fg_color="transparent")
+        status_block.grid(row=0, column=1, sticky="e", padx=20)
+        ctk.CTkLabel(status_block, text="●  AGI EDITION  v3.0", font=("Consolas", 11), text_color=COLOR_GOLD).pack(side="right", padx=5)
+        self.label_title = ctk.CTkLabel(status_block, text="●  ONLINE", font=("Consolas", 11), text_color=COLOR_SUCCESS)
+        self.label_title.pack(side="right", padx=5)
 
         # 2. Controls Dashboard
         self.dashboard_frame = ctk.CTkFrame(parent, fg_color="transparent")
@@ -219,63 +322,115 @@ class App(ctk.CTk):
         self.dashboard_frame.grid_columnconfigure((0, 1), weight=1)
 
         # Left Panel: Core
-        self.panel_core = ctk.CTkFrame(self.dashboard_frame, fg_color=COLOR_PANEL, corner_radius=10, border_color="#333", border_width=1)
+        self.panel_core = ctk.CTkFrame(self.dashboard_frame, fg_color=COLOR_PANEL, corner_radius=10, border_color=COLOR_BORDER, border_width=1)
         self.panel_core.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        ctk.CTkLabel(self.panel_core, text="SYSTEM CONTROLS", font=("Consolas", 12, "bold"), text_color="gray").pack(pady=5)
+        ctk.CTkLabel(self.panel_core, text="SYSTEM CONTROLS", font=("Consolas", 12, "bold"), text_color=COLOR_TEXT_DIM).pack(pady=5)
         
-        self.btn_start = ctk.CTkButton(self.panel_core, text="INITIALIZE BROWSER", command=self.start_browser, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black", font=("Consolas", 12, "bold"))
+        self.btn_start = ctk.CTkButton(self.panel_core, corner_radius=8, text="▶  INITIALIZE BROWSER", command=self.start_browser, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="#000000", font=("Consolas", 12, "bold"))
         self.btn_start.pack(fill="x", padx=10, pady=5)
-        self.btn_close = ctk.CTkButton(self.panel_core, text="TERMINATE SESSION", command=self.close_browser, fg_color=COLOR_PANEL, border_color=COLOR_ERROR, border_width=1, hover_color="#330000", text_color=COLOR_ERROR, font=("Consolas", 12, "bold"))
+        self.btn_close = ctk.CTkButton(self.panel_core, corner_radius=8, text="■  TERMINATE SESSION", command=self.close_browser, fg_color=COLOR_PANEL, border_color=COLOR_ERROR, border_width=1, hover_color="#1a0010", text_color=COLOR_ERROR, font=("Consolas", 12, "bold"))
         self.btn_close.pack(fill="x", padx=10, pady=5)
 
-        # Right Panel: Rec
-        self.panel_rec = ctk.CTkFrame(self.dashboard_frame, fg_color=COLOR_PANEL, corner_radius=10, border_color="#333", border_width=1)
+        # Right Panel: Memory
+        self.panel_rec = ctk.CTkFrame(self.dashboard_frame, fg_color=COLOR_PANEL, corner_radius=10, border_color=COLOR_BORDER, border_width=1)
         self.panel_rec.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        ctk.CTkLabel(self.panel_rec, text="MEMORY MODULE", font=("Consolas", 12, "bold"), text_color="gray").pack(pady=5)
-        self.btn_rec_save = ctk.CTkButton(self.panel_rec, text="SAVE SEQUENCE", command=self.save_recording, fg_color=COLOR_PANEL, border_color=COLOR_ACCENT, border_width=1, text_color=COLOR_ACCENT)
+        ctk.CTkLabel(self.panel_rec, text="MEMORY MODULE", font=("Consolas", 12, "bold"), text_color=COLOR_TEXT_DIM).pack(pady=5)
+        self.btn_rec_save = ctk.CTkButton(self.panel_rec, corner_radius=8, text="⤓ SAVE SEQUENCE", command=self.save_recording, fg_color=COLOR_PANEL, border_color=COLOR_ACCENT, border_width=1, text_color=COLOR_ACCENT, hover_color=COLOR_PANEL2)
         self.btn_rec_save.pack(side="left", fill="both", expand=True, padx=5, pady=10)
-        self.btn_replay = ctk.CTkButton(self.panel_rec, text="EXECUTE REPLAY", command=self.replay_recording, fg_color=COLOR_PANEL, border_color=COLOR_SUCCESS, border_width=1, text_color=COLOR_SUCCESS)
+        self.btn_replay = ctk.CTkButton(self.panel_rec, corner_radius=8, text="▶ EXECUTE REPLAY", command=self.replay_recording, fg_color=COLOR_PANEL, border_color=COLOR_SUCCESS, border_width=1, text_color=COLOR_SUCCESS, hover_color=COLOR_PANEL2)
         self.btn_replay.pack(side="right", fill="both", expand=True, padx=5, pady=10)
 
         # 3. Log Console
-        self.log_textbox = ctk.CTkTextbox(parent, fg_color=COLOR_LOG, text_color=COLOR_SUCCESS, font=("Consolas", 13), corner_radius=10)
+        self.log_textbox = ctk.CTkTextbox(
+            parent,
+            fg_color=COLOR_LOG,
+            text_color="#00ff99",
+            font=("Consolas", 12),
+            corner_radius=10,
+            border_color=COLOR_BORDER,
+            border_width=1,
+            scrollbar_button_color=COLOR_PANEL2,
+            scrollbar_button_hover_color=COLOR_ACCENT
+        )
         self.log_textbox.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
 
-        # 4. Mode Selection (New)
+        # 4. Mode Selection
         self.frame_mode = ctk.CTkFrame(parent, fg_color="transparent")
         self.frame_mode.grid(row=3, column=0, sticky="ew", padx=10)
         
-        ctk.CTkLabel(self.frame_mode, text="ACTIVE PERSONA:", font=("Consolas", 12, "bold"), text_color="gray").pack(side="left", padx=5)
-        self.option_mode = ctk.CTkOptionMenu(self.frame_mode, values=["GENERAL", "SOCIAL_MEDIA", "CRYPTO_TRADER"], fg_color=COLOR_PANEL, button_color=COLOR_ACCENT, button_hover_color=COLOR_ACCENT_HOVER, text_color="white")
+        ctk.CTkLabel(self.frame_mode, text="ACTIVE PERSONA:", font=("Consolas", 12, "bold"), text_color=COLOR_TEXT_DIM).pack(side="left", padx=5)
+        self.option_mode = ctk.CTkOptionMenu(
+            self.frame_mode,
+            values=["GENERAL", "SOCIAL_MEDIA", "CRYPTO_TRADER"],
+            fg_color=COLOR_PANEL, button_color=COLOR_ACCENT,
+            button_hover_color=COLOR_ACCENT_HOVER, text_color=COLOR_TEXT,
+            dropdown_fg_color=COLOR_PANEL2, dropdown_text_color=COLOR_TEXT
+        )
         self.option_mode.pack(side="left", padx=5)
         self.option_mode.set("GENERAL")
 
-        # 5. Command Bar
-        self.cmd_frame = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, height=80, corner_radius=10)
+        # 5. Command Bar (Premium)
+        self.cmd_frame = ctk.CTkFrame(
+            parent, fg_color=COLOR_PANEL, height=72, corner_radius=10,
+            border_color=COLOR_ACCENT, border_width=1
+        )
         self.cmd_frame.grid(row=4, column=0, sticky="ew", padx=10, pady=(0, 10))
         
-        self.btn_voice = ctk.CTkButton(self.cmd_frame, text="🎤 VOX: OFF", command=self.toggle_listening, width=100, fg_color=COLOR_PANEL, border_color="#555", border_width=1, font=("Consolas", 11, "bold"))
-        self.btn_voice.pack(side="left", padx=20, pady=20)
+        self.btn_voice = ctk.CTkButton(
+            self.cmd_frame, corner_radius=8,
+            text="🎤 VOX: OFF", command=self.toggle_listening,
+            width=105, fg_color=COLOR_PANEL2, border_color=COLOR_BORDER, border_width=1,
+            font=("Consolas", 11, "bold"), hover_color=COLOR_PANEL
+        )
+        self.btn_voice.pack(side="left", padx=15, pady=18)
         if not self.voice_available: self.btn_voice.configure(state="disabled", text="VOX N/A")
 
-        self.autopilot_checkbox = ctk.CTkCheckBox(self.cmd_frame, text="🤖 AUTO-PILOT", font=("Consolas", 11, "bold"), text_color=COLOR_ACCENT)
-        self.autopilot_checkbox.pack(side="left", padx=10, pady=20)
+        self.autopilot_checkbox = ctk.CTkCheckBox(
+            self.cmd_frame, text="🤖 AUTO-PILOT",
+            font=("Consolas", 11, "bold"), text_color=COLOR_ACCENT,
+            checkmark_color=COLOR_ACCENT, fg_color=COLOR_ACCENT, hover_color=COLOR_PANEL2
+        )
+        self.autopilot_checkbox.pack(side="left", padx=10, pady=18)
         
-        self.godmode_checkbox = ctk.CTkCheckBox(self.cmd_frame, text="⚡ GOD MODE", font=("Consolas", 11, "bold"), text_color="#ffbe00")
-        self.godmode_checkbox.pack(side="left", padx=10, pady=20)
+        self.godmode_checkbox = ctk.CTkCheckBox(
+            self.cmd_frame, text="⚡ GOD MODE",
+            font=("Consolas", 11, "bold"), text_color=COLOR_GOLD,
+            checkmark_color=COLOR_GOLD, fg_color=COLOR_GOLD, hover_color=COLOR_PANEL2
+        )
+        self.godmode_checkbox.pack(side="left", padx=10, pady=18)
         
-        self.vision_checkbox = ctk.CTkCheckBox(self.cmd_frame, text="👁️ VISION AI", command=self.toggle_vision, font=("Consolas", 11, "bold"), text_color="#00ffcc")
-        self.vision_checkbox.pack(side="left", padx=10, pady=20)
+        self.vision_checkbox = ctk.CTkCheckBox(
+            self.cmd_frame, text="👁️ VISION AI", command=self.toggle_vision,
+            font=("Consolas", 11, "bold"), text_color="#00ffcc",
+            checkmark_color="#00ffcc", fg_color="#00ffcc", hover_color=COLOR_PANEL2
+        )
+        self.vision_checkbox.pack(side="left", padx=10, pady=18)
 
-        self.btn_stop_autopilot = ctk.CTkButton(self.cmd_frame, text="⏹ STOP", command=self.stop_autopilot, width=80, fg_color=COLOR_ERROR, hover_color="#990000", text_color="white", font=("Consolas", 11, "bold"))
-        self.btn_stop_autopilot.pack(side="left", padx=5, pady=20)
-        self.btn_stop_autopilot.pack_forget()  # Hide initially
+        self.btn_stop_autopilot = ctk.CTkButton(self.cmd_frame, corner_radius=8, text="⏹ STOP", command=self.stop_autopilot,
+            width=80, fg_color=COLOR_ERROR, hover_color="#770022",
+            text_color="white", font=("Consolas", 11, "bold")
+        )
+        self.btn_stop_autopilot.pack(side="left", padx=5, pady=18)
+        self.btn_stop_autopilot.pack_forget()
 
-        self.entry_cmd = ctk.CTkEntry(self.cmd_frame, placeholder_text="ENTER COMMAND SEQUENCE...", font=("Consolas", 14), fg_color="#000000", border_color="#333", text_color="white")
-        self.entry_cmd.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=20)
+        self.entry_cmd = ctk.CTkEntry(
+            self.cmd_frame,
+            placeholder_text="❯  ENTER COMMAND SEQUENCE...",
+            font=("Consolas", 13),
+            fg_color=COLOR_LOG,
+            border_color=COLOR_BORDER,
+            border_width=1,
+            text_color=COLOR_TEXT,
+            placeholder_text_color=COLOR_TEXT_DIM
+        )
+        self.entry_cmd.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=18)
         self.entry_cmd.bind("<Return>", lambda event: self.submit_text_command())
-        self.btn_submit = ctk.CTkButton(self.cmd_frame, text="EXECUTE", command=self.submit_text_command, width=100, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black")
-        self.btn_submit.pack(side="right", padx=20, pady=20)
+
+        self.btn_submit = ctk.CTkButton(self.cmd_frame, corner_radius=8, text="EXECUTE →", command=self.submit_text_command,
+            width=110, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+            text_color="#000000", font=("Consolas", 12, "bold")
+        )
+        self.btn_submit.pack(side="right", padx=15, pady=18)
 
     def _setup_settings_tab(self):
         parent = self.tab_settings
@@ -294,7 +449,7 @@ class App(ctk.CTk):
         if self.cfg.get("api_key"):
             self.entry_settings_api.insert(0, self.cfg.get("api_key"))
 
-        self.btn_test_api = ctk.CTkButton(self.frame_api, text="TEST CONNECTION & SAVE", command=self.test_and_save_api, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black")
+        self.btn_test_api = ctk.CTkButton(self.frame_api, corner_radius=8, text="TEST CONNECTION & SAVE", command=self.test_and_save_api, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black")
         self.btn_test_api.pack(anchor="w", padx=20, pady=(10, 20))
         
         self.lbl_api_status = ctk.CTkLabel(self.frame_api, text="", font=("Consolas", 12))
@@ -329,7 +484,7 @@ class App(ctk.CTk):
         if self.cfg.get("ollama_model"):
             self.ollama_model_entry.insert(0, self.cfg.get("ollama_model"))
         
-        self.btn_save_ollama = ctk.CTkButton(self.frame_ollama, text="SAVE & CONNECT", command=self.save_ollama_config, width=120, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black")
+        self.btn_save_ollama = ctk.CTkButton(self.frame_ollama, corner_radius=8, text="SAVE & CONNECT", command=self.save_ollama_config, width=120, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black")
         self.btn_save_ollama.pack(side="left", padx=5)
 
         # OpenRouter configuration
@@ -348,8 +503,7 @@ class App(ctk.CTk):
         if self.cfg.get("openrouter_model"):
             self.openrouter_model_entry.insert(0, self.cfg.get("openrouter_model"))
 
-        self.btn_save_openrouter = ctk.CTkButton(
-            self.frame_openrouter, text="SAVE & CONNECT",
+        self.btn_save_openrouter = ctk.CTkButton(self.frame_openrouter, corner_radius=8, text="SAVE & CONNECT",
             command=self.save_openrouter_config, width=130,
             fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black"
         )
@@ -383,7 +537,7 @@ class App(ctk.CTk):
         self.entry_chat.grid(row=0, column=0, sticky="ew", padx=(0, 10))
         self.entry_chat.bind("<Return>", lambda e: self.submit_chat())
 
-        self.btn_chat_send = ctk.CTkButton(frame_input, text="SEND", command=self.submit_chat, width=80, height=40, font=("Consolas", 12, "bold"), fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black")
+        self.btn_chat_send = ctk.CTkButton(frame_input, corner_radius=8, text="SEND", command=self.submit_chat, width=80, height=40, font=("Consolas", 12, "bold"), fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black")
         self.btn_chat_send.grid(row=0, column=1)
 
     def submit_chat(self):
@@ -417,7 +571,7 @@ class App(ctk.CTk):
                 context = context[-4000:] if len(context) > 4000 else context
                 
                 full_prompt = (
-                    "You are Neural Automater, an advanced desktop AI Assistant.\n"
+                    "You are Neural Omni, an advanced desktop AI Assistant.\n"
                     f"Conversation so far:\n{context}\n"
                     "Reply naturally to the USER. Do not use JSON. Just chat."
                 )
@@ -450,7 +604,7 @@ class App(ctk.CTk):
         self.entry_sched_target = ctk.CTkEntry(frame_add, placeholder_text="Filename or Goal", width=200)
         self.entry_sched_target.pack(side="left", padx=10, pady=10)
         
-        btn_add = ctk.CTkButton(frame_add, text="SCHEDULE", command=self.add_scheduled_task, fg_color=COLOR_ACCENT, text_color="black")
+        btn_add = ctk.CTkButton(frame_add, corner_radius=8, text="SCHEDULE", command=self.add_scheduled_task, fg_color=COLOR_ACCENT, text_color="black")
         btn_add.pack(side="left", padx=10, pady=10)
         
         # Task List
@@ -481,7 +635,7 @@ class App(ctk.CTk):
         self.entry_acc_pass = ctk.CTkEntry(self.frame_acc_edit, placeholder_text="Password", show="*", width=250)
         self.entry_acc_pass.pack(pady=10)
         
-        btn_save_acc = ctk.CTkButton(self.frame_acc_edit, text="SAVE ENCRYPTED", command=self.save_account, fg_color=COLOR_SUCCESS, text_color="black")
+        btn_save_acc = ctk.CTkButton(self.frame_acc_edit, corner_radius=8, text="SAVE ENCRYPTED", command=self.save_account, fg_color=COLOR_SUCCESS, text_color="black")
         btn_save_acc.pack(pady=20)
         
         self.refresh_account_list()
@@ -498,7 +652,7 @@ class App(ctk.CTk):
             
             ctk.CTkLabel(f, text=platform, font=("Consolas", 12, "bold")).pack(side="left", padx=10)
             
-            btn_login = ctk.CTkButton(f, text="INSTANT SIGN IN", width=100, 
+            btn_login = ctk.CTkButton(f, corner_radius=8, text="INSTANT SIGN IN", width=100, 
                                       command=lambda p=platform: self.instant_login(p),
                                       fg_color=COLOR_ACCENT, text_color="black")
             btn_login.pack(side="right", padx=5, pady=5)
@@ -555,7 +709,7 @@ class App(ctk.CTk):
         self.entry_social_topic.pack(fill="x", padx=10, pady=5)
 
         # Research Button
-        self.btn_research = ctk.CTkButton(frame_left, text="🔍 RESEARCH TRENDS", command=self.research_trends, fg_color=COLOR_ACCENT, text_color="black")
+        self.btn_research = ctk.CTkButton(frame_left, corner_radius=8, text="🔍 RESEARCH TRENDS", command=self.research_trends, fg_color=COLOR_ACCENT, text_color="black")
         self.btn_research.pack(fill="x", padx=10, pady=10)
 
         # Trends Display
@@ -569,7 +723,7 @@ class App(ctk.CTk):
         self.option_vibe.pack(fill="x", padx=10, pady=5)
 
         # Generate Button
-        self.btn_gen_social = ctk.CTkButton(frame_left, text="✨ GENERATE POST", command=self.generate_social_post, fg_color=COLOR_SUCCESS, text_color="black")
+        self.btn_gen_social = ctk.CTkButton(frame_left, corner_radius=8, text="✨ GENERATE POST", command=self.generate_social_post, fg_color=COLOR_SUCCESS, text_color="black")
         self.btn_gen_social.pack(fill="x", padx=10, pady=20)
 
         # Right Panel: Preview & Post
@@ -590,10 +744,10 @@ class App(ctk.CTk):
         
         ctk.CTkLabel(frame_post, text="PUBLISH TO", font=("Consolas", 12, "bold")).pack(side="left", padx=10)
         
-        self.btn_post_twitter = ctk.CTkButton(frame_post, text="TWITTER / X", command=lambda: self.post_social("twitter"), width=120, fg_color="#1DA1F2")
+        self.btn_post_twitter = ctk.CTkButton(frame_post, corner_radius=8, text="TWITTER / X", command=lambda: self.post_social("twitter"), width=120, fg_color="#1DA1F2")
         self.btn_post_twitter.pack(side="left", padx=5, pady=10)
         
-        self.btn_post_linkedin = ctk.CTkButton(frame_post, text="LINKEDIN", command=lambda: self.post_social("linkedin"), width=120, fg_color="#0077b5")
+        self.btn_post_linkedin = ctk.CTkButton(frame_post, corner_radius=8, text="LINKEDIN", command=lambda: self.post_social("linkedin"), width=120, fg_color="#0077b5")
         self.btn_post_linkedin.pack(side="left", padx=5, pady=10)
 
         self.lbl_social_status = ctk.CTkLabel(frame_right, text="", font=("Consolas", 11))
@@ -603,7 +757,7 @@ class App(ctk.CTk):
 
         # --- AUTO COMMENT BOT SECTION ---
         # Placed at the bottom of the right panel, spanning full width
-        frame_comment = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10, border_color="#333", border_width=1)
+        frame_comment = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10, border_color="#1e1e38", border_width=1)
         frame_comment.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
 
         ctk.CTkLabel(
@@ -624,7 +778,7 @@ class App(ctk.CTk):
             placeholder_text="Paste a specific tweet/post URL for a single comment",
             font=("Consolas", 12),
             fg_color="#000",
-            border_color="#333",
+            border_color="#1e1e38",
             text_color="white"
         )
         self.entry_comment_url.grid(row=1, column=0, sticky="ew", padx=(0, 10), pady=(0, 4))
@@ -651,7 +805,7 @@ class App(ctk.CTk):
             placeholder_text="AI, Crypto, Python, Tech News",
             font=("Consolas", 12),
             fg_color="#111",
-            border_color="#444",
+            border_color="#1e1e38",
             text_color="white"
         )
         self.entry_bot_keywords.pack(fill="x", pady=(0, 8))
@@ -665,14 +819,15 @@ class App(ctk.CTk):
         self.entry_bot_max.insert(0, "5")
         self.entry_bot_max.pack(side="left", padx=5)
 
-        ctk.CTkLabel(row2b, text="DELAY RANGE (S):", font=("Consolas", 10)).pack(side="left", padx=(15, 5))
-        self.entry_bot_delay_min = ctk.CTkEntry(row2b, width=50, placeholder_text="30")
-        self.entry_bot_delay_min.insert(0, "30")
+        ctk.CTkLabel(row2b, text="DELAY BETWEEN REPLIES (sec):", font=("Consolas", 10), text_color="#aaa").pack(side="left", padx=(15, 5))
+        self.entry_bot_delay_min = ctk.CTkEntry(row2b, width=50, placeholder_text="8")
+        self.entry_bot_delay_min.insert(0, "8")
         self.entry_bot_delay_min.pack(side="left", padx=5)
-        ctk.CTkLabel(row2b, text="-").pack(side="left")
-        self.entry_bot_delay_max = ctk.CTkEntry(row2b, width=50, placeholder_text="90")
-        self.entry_bot_delay_max.insert(0, "90")
+        ctk.CTkLabel(row2b, text="–", text_color="gray").pack(side="left")
+        self.entry_bot_delay_max = ctk.CTkEntry(row2b, width=50, placeholder_text="20")
+        self.entry_bot_delay_max.insert(0, "20")
         self.entry_bot_delay_max.pack(side="left", padx=5)
+        ctk.CTkLabel(row2b, text="(↑ increase to avoid rate limits)", font=("Consolas", 9), text_color="gray").pack(side="left", padx=(5, 0))
 
         # Row 3: Prompt
         row3 = ctk.CTkFrame(frame_comment, fg_color="transparent")
@@ -684,7 +839,7 @@ class App(ctk.CTk):
             placeholder_text="e.g. Be funny and edgy",
             font=("Consolas", 12),
             fg_color="#000",
-            border_color="#333",
+            border_color="#1e1e38",
             text_color="white"
         )
         self.entry_comment_prompt.pack(fill="x", pady=4)
@@ -703,8 +858,7 @@ class App(ctk.CTk):
         row4 = ctk.CTkFrame(frame_comment, fg_color="transparent")
         row4.pack(fill="x", padx=15, pady=(4, 6))
 
-        self.btn_auto_comment = ctk.CTkButton(
-            row4,
+        self.btn_auto_comment = ctk.CTkButton(row4, corner_radius=8,
             text="🚀 START AUTO-COMMENT BOT",
             command=self.execute_auto_comment,
             fg_color=COLOR_ACCENT,
@@ -714,8 +868,7 @@ class App(ctk.CTk):
         )
         self.btn_auto_comment.pack(side="left", padx=(0, 10))
 
-        self.btn_stop_bot = ctk.CTkButton(
-            row4,
+        self.btn_stop_bot = ctk.CTkButton(row4, corner_radius=8,
             text="⛔ STOP",
             command=self._stop_bot_action,
             fg_color="#7a0000",
@@ -838,7 +991,7 @@ class App(ctk.CTk):
             try:
                 keywords = [k.strip() for k in bot_keywords.split(",") if k.strip()]
                 max_replies = int(self.entry_bot_max.get() or 5)
-                delay_range = (int(self.entry_bot_delay_min.get() or 30), int(self.entry_bot_delay_max.get() or 90))
+                delay_range = (int(self.entry_bot_delay_min.get() or 8), int(self.entry_bot_delay_max.get() or 20))
             except ValueError:
                 self.lbl_comment_status.configure(text="ERROR: INVALID NUMBERS", text_color=COLOR_ERROR)
                 return
@@ -944,7 +1097,7 @@ class App(ctk.CTk):
         parent = self.tab_comms
         parent.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(parent, text="⚡ COMMUNICATIONS HUB", font=("Consolas", 18, "bold"), text_color="#00e5ff").pack(pady=(15, 5))
+        ctk.CTkLabel(parent, text="⚡ COMMUNICATIONS HUB", font=("Consolas", 18, "bold"), text_color="#00f0ff").pack(pady=(15, 5))
         ctk.CTkLabel(parent, text="Email · Calendar · Phone · Wake Word", font=("Consolas", 11), text_color="gray").pack(pady=(0, 10))
 
         scroll = ctk.CTkScrollableFrame(parent, fg_color="transparent")
@@ -952,9 +1105,9 @@ class App(ctk.CTk):
         scroll.grid_columnconfigure(0, weight=1)
 
         # ── EMAIL PANEL ────────────────────────────────────────────────
-        email_frame = ctk.CTkFrame(scroll, fg_color=COLOR_PANEL, corner_radius=10, border_color="#00e5ff", border_width=1)
+        email_frame = ctk.CTkFrame(scroll, fg_color=COLOR_PANEL, corner_radius=10, border_color="#00f0ff", border_width=1)
         email_frame.pack(fill="x", pady=(0, 10))
-        ctk.CTkLabel(email_frame, text="📧 GMAIL INTEGRATION", font=("Consolas", 13, "bold"), text_color="#00e5ff").pack(anchor="w", padx=15, pady=(12, 5))
+        ctk.CTkLabel(email_frame, text="📧 GMAIL INTEGRATION", font=("Consolas", 13, "bold"), text_color="#00f0ff").pack(anchor="w", padx=15, pady=(12, 5))
 
         row_email_cfg = ctk.CTkFrame(email_frame, fg_color="transparent")
         row_email_cfg.pack(fill="x", padx=15, pady=2)
@@ -962,14 +1115,14 @@ class App(ctk.CTk):
         self.entry_email_addr.pack(side="left", padx=(0, 10))
         self.entry_email_pw = ctk.CTkEntry(row_email_cfg, placeholder_text="Gmail App Password", font=("Consolas", 12), show="*", width=200)
         self.entry_email_pw.pack(side="left", padx=(0, 10))
-        ctk.CTkButton(row_email_cfg, text="CONNECT", font=("Consolas", 12, "bold"), fg_color="#00e5ff", text_color="black", hover_color="#00b8cc", width=100, command=self._email_connect).pack(side="left")
+        ctk.CTkButton(row_email_cfg, corner_radius=8, text="CONNECT", font=("Consolas", 12, "bold"), fg_color="#00f0ff", text_color="black", hover_color="#00b8cc", width=100, command=self._email_connect).pack(side="left")
 
         self.lbl_email_status = ctk.CTkLabel(email_frame, text="Not connected", font=("Consolas", 11), text_color="gray")
         self.lbl_email_status.pack(anchor="w", padx=15, pady=2)
 
         row_email_btns = ctk.CTkFrame(email_frame, fg_color="transparent")
         row_email_btns.pack(fill="x", padx=15, pady=5)
-        ctk.CTkButton(row_email_btns, text="📥 READ INBOX", font=("Consolas", 12, "bold"), fg_color=COLOR_PANEL, border_color="#00e5ff", border_width=1, text_color="#00e5ff", command=self._email_read_inbox).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(row_email_btns, corner_radius=8, text="📥 READ INBOX", font=("Consolas", 12, "bold"), fg_color=COLOR_PANEL, border_color="#00f0ff", border_width=1, text_color="#00f0ff", command=self._email_read_inbox).pack(side="left", padx=(0, 10))
 
         # Compose panel
         ctk.CTkLabel(email_frame, text="COMPOSE:", font=("Consolas", 11), text_color="gray").pack(anchor="w", padx=15)
@@ -979,7 +1132,7 @@ class App(ctk.CTk):
         self.entry_email_subj.pack(fill="x", padx=15, pady=2)
         self.txt_email_body = ctk.CTkTextbox(email_frame, height=80, font=("Consolas", 12))
         self.txt_email_body.pack(fill="x", padx=15, pady=2)
-        ctk.CTkButton(email_frame, text="📤 SEND EMAIL", font=("Consolas", 12, "bold"), fg_color="#00cc55", text_color="black", hover_color="#00993f", command=self._email_send).pack(anchor="w", padx=15, pady=(5, 12))
+        ctk.CTkButton(email_frame, corner_radius=8, text="📤 SEND EMAIL", font=("Consolas", 12, "bold"), fg_color="#00cc55", text_color="black", hover_color="#00993f", command=self._email_send).pack(anchor="w", padx=15, pady=(5, 12))
 
         self.txt_email_output = ctk.CTkTextbox(email_frame, height=160, font=("Consolas", 11), fg_color=COLOR_LOG)
         self.txt_email_output.pack(fill="x", padx=15, pady=(0, 12))
@@ -991,8 +1144,8 @@ class App(ctk.CTk):
 
         row_cal = ctk.CTkFrame(cal_frame, fg_color="transparent")
         row_cal.pack(fill="x", padx=15, pady=5)
-        ctk.CTkButton(row_cal, text="🔗 CONNECT GOOGLE", font=("Consolas", 12, "bold"), fg_color="#7b2fff", text_color="white", width=180, command=self._calendar_connect).pack(side="left", padx=(0, 10))
-        ctk.CTkButton(row_cal, text="📋 VIEW UPCOMING", font=("Consolas", 12, "bold"), fg_color=COLOR_PANEL, border_color="#7b2fff", border_width=1, text_color="#7b2fff", command=self._calendar_view).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(row_cal, corner_radius=8, text="🔗 CONNECT GOOGLE", font=("Consolas", 12, "bold"), fg_color="#7b2fff", text_color="white", width=180, command=self._calendar_connect).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(row_cal, corner_radius=8, text="📋 VIEW UPCOMING", font=("Consolas", 12, "bold"), fg_color=COLOR_PANEL, border_color="#7b2fff", border_width=1, text_color="#7b2fff", command=self._calendar_view).pack(side="left", padx=(0, 10))
 
         ctk.CTkLabel(cal_frame, text="CREATE EVENT:", font=("Consolas", 11), text_color="gray").pack(anchor="w", padx=15, pady=(5, 0))
         row_new_event = ctk.CTkFrame(cal_frame, fg_color="transparent")
@@ -1003,7 +1156,7 @@ class App(ctk.CTk):
         self.entry_cal_date.pack(side="left", padx=(0, 5))
         self.entry_cal_time = ctk.CTkEntry(row_new_event, placeholder_text="HH:MM", font=("Consolas", 12), width=80)
         self.entry_cal_time.pack(side="left", padx=(0, 5))
-        ctk.CTkButton(row_new_event, text="ADD", font=("Consolas", 11, "bold"), fg_color="#7b2fff", text_color="white", width=60, command=self._calendar_create).pack(side="left")
+        ctk.CTkButton(row_new_event, corner_radius=8, text="ADD", font=("Consolas", 11, "bold"), fg_color="#7b2fff", text_color="white", width=60, command=self._calendar_create).pack(side="left")
 
         self.txt_cal_output = ctk.CTkTextbox(cal_frame, height=120, font=("Consolas", 11), fg_color=COLOR_LOG)
         self.txt_cal_output.pack(fill="x", padx=15, pady=(5, 12))
@@ -1022,7 +1175,7 @@ class App(ctk.CTk):
         self.entry_twilio_token.pack(side="left", padx=(0, 5))
         self.entry_twilio_from = ctk.CTkEntry(row_twilio_cfg, placeholder_text="+1XXXXXXXXXX", font=("Consolas", 12), width=130)
         self.entry_twilio_from.pack(side="left", padx=(0, 5))
-        ctk.CTkButton(row_twilio_cfg, text="CONNECT", font=("Consolas", 11, "bold"), fg_color="#ff6600", text_color="black", width=90, command=self._phone_connect).pack(side="left")
+        ctk.CTkButton(row_twilio_cfg, corner_radius=8, text="CONNECT", font=("Consolas", 11, "bold"), fg_color="#ff6600", text_color="black", width=90, command=self._phone_connect).pack(side="left")
 
         self.lbl_phone_status = ctk.CTkLabel(phone_frame, text="Not connected", font=("Consolas", 11), text_color="gray")
         self.lbl_phone_status.pack(anchor="w", padx=15)
@@ -1034,14 +1187,14 @@ class App(ctk.CTk):
 
         row_phone_btns = ctk.CTkFrame(phone_frame, fg_color="transparent")
         row_phone_btns.pack(fill="x", padx=15, pady=(5, 12))
-        ctk.CTkButton(row_phone_btns, text="📞 CALL", font=("Consolas", 12, "bold"), fg_color="#ff6600", text_color="black", width=100, command=self._phone_call).pack(side="left", padx=(0, 10))
-        ctk.CTkButton(row_phone_btns, text="💬 SEND SMS", font=("Consolas", 12, "bold"), fg_color=COLOR_PANEL, border_color="#ff6600", border_width=1, text_color="#ff6600", width=110, command=self._phone_sms).pack(side="left")
+        ctk.CTkButton(row_phone_btns, corner_radius=8, text="📞 CALL", font=("Consolas", 12, "bold"), fg_color="#ff6600", text_color="black", width=100, command=self._phone_call).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(row_phone_btns, corner_radius=8, text="💬 SEND SMS", font=("Consolas", 12, "bold"), fg_color=COLOR_PANEL, border_color="#ff6600", border_width=1, text_color="#ff6600", width=110, command=self._phone_sms).pack(side="left")
 
         # ── WAKE WORD PANEL ───────────────────────────────────────────
         wake_frame = ctk.CTkFrame(scroll, fg_color=COLOR_PANEL, corner_radius=10, border_color="#00ffcc", border_width=1)
         wake_frame.pack(fill="x", pady=(0, 10))
-        ctk.CTkLabel(wake_frame, text="👂 WAKE WORD: \"HEY AUTOMATER\"", font=("Consolas", 13, "bold"), text_color="#00ffcc").pack(anchor="w", padx=15, pady=(12, 5))
-        ctk.CTkLabel(wake_frame, text="Always-on microphone listener. Activates Neural Automater hands-free.", font=("Consolas", 10), text_color="gray").pack(anchor="w", padx=15)
+        ctk.CTkLabel(wake_frame, text="👂 WAKE WORD: \"HEY OMNI\"", font=("Consolas", 13, "bold"), text_color="#00ffcc").pack(anchor="w", padx=15, pady=(12, 5))
+        ctk.CTkLabel(wake_frame, text="Always-on microphone listener. Activates Neural Omni hands-free.", font=("Consolas", 10), text_color="gray").pack(anchor="w", padx=15)
 
         row_wake = ctk.CTkFrame(wake_frame, fg_color="transparent")
         row_wake.pack(fill="x", padx=15, pady=(10, 12))
@@ -1136,14 +1289,14 @@ class App(ctk.CTk):
     def _toggle_wake_word(self):
         if self.wake_toggle.get():
             result = self.wake_word_agent.start()
-            self.lbl_wake_status.configure(text="● ACTIVE — Say 'Hey Automater'", text_color="#00ffcc")
+            self.lbl_wake_status.configure(text="● ACTIVE — Say 'Hey Omni'", text_color="#00ffcc")
             self.log(f">> WAKE WORD: {result}")
         else:
             self.wake_word_agent.stop()
             self.lbl_wake_status.configure(text="● INACTIVE", text_color="gray")
 
     def _on_wake_word(self):
-        """Called by WakeWordAgent when 'Hey Automater' is detected."""
+        """Called by WakeWordAgent when 'Hey Omni' is detected."""
         self.after(0, self._focus_and_listen)
 
     def _focus_and_listen(self):
@@ -1160,7 +1313,7 @@ class App(ctk.CTk):
         
         ctk.CTkLabel(parent, text="WHATSAPP PRO AUTOMATION", font=("Consolas", 18, "bold"), text_color="#25D366").pack(pady=20)
         
-        frame_main = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10, border_color="#333", border_width=1)
+        frame_main = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10, border_color="#1e1e38", border_width=1)
         frame_main.pack(fill="x", padx=20, pady=10)
         
         ctk.CTkLabel(frame_main, text="DIRECT MESSAGE CONSOLE", font=("Consolas", 14, "bold"), text_color="#25D366").pack(anchor="w", padx=15, pady=(15, 5))
@@ -1176,17 +1329,17 @@ class App(ctk.CTk):
         frame_actions = ctk.CTkFrame(frame_main, fg_color="transparent")
         frame_actions.pack(fill="x", padx=15, pady=(5, 15))
         
-        self.btn_wa_send = ctk.CTkButton(frame_actions, text="SEND CUSTOM MESSAGE", command=lambda: self.execute_whatsapp(ai=False), fg_color="#075e54", hover_color="#128c7e", text_color="white", font=("Consolas", 12, "bold"))
+        self.btn_wa_send = ctk.CTkButton(frame_actions, corner_radius=8, text="SEND CUSTOM MESSAGE", command=lambda: self.execute_whatsapp(ai=False), fg_color="#075e54", hover_color="#128c7e", text_color="white", font=("Consolas", 12, "bold"))
         self.btn_wa_send.pack(side="left", padx=(0, 10))
         
-        self.btn_wa_ai = ctk.CTkButton(frame_actions, text="GENERATE & SEND AI MESSAGE", command=lambda: self.execute_whatsapp(ai=True), fg_color="#25D366", hover_color="#1DA851", text_color="black", font=("Consolas", 12, "bold"))
+        self.btn_wa_ai = ctk.CTkButton(frame_actions, corner_radius=8, text="GENERATE & SEND AI MESSAGE", command=lambda: self.execute_whatsapp(ai=True), fg_color="#25D366", hover_color="#1DA851", text_color="black", font=("Consolas", 12, "bold"))
         self.btn_wa_ai.pack(side="left")
         
         self.lbl_wa_status = ctk.CTkLabel(frame_main, text="READY", font=("Consolas", 11), text_color="gray")
         self.lbl_wa_status.pack(pady=10)
 
         # --- AUTORESPONDER BOT ---
-        frame_bot = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10, border_color="#333", border_width=1)
+        frame_bot = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10, border_color="#1e1e38", border_width=1)
         frame_bot.pack(fill="x", padx=20, pady=(10, 20))
         
         ctk.CTkLabel(frame_bot, text="⚡ AI AUTO-RESPONDER BOT", font=("Consolas", 14, "bold"), text_color=COLOR_ACCENT).pack(anchor="w", padx=15, pady=(15, 5))
@@ -1198,10 +1351,10 @@ class App(ctk.CTk):
         row_bot = ctk.CTkFrame(frame_bot, fg_color="transparent")
         row_bot.pack(fill="x", padx=15, pady=(5, 15))
         
-        self.btn_wa_bot_start = ctk.CTkButton(row_bot, text="🚀 START AUTO-RESPONDER", command=self.start_wa_autoresponder, fg_color="#1DA851", hover_color="#25D366", text_color="black", font=("Consolas", 12, "bold"))
+        self.btn_wa_bot_start = ctk.CTkButton(row_bot, corner_radius=8, text="🚀 START AUTO-RESPONDER", command=self.start_wa_autoresponder, fg_color="#1DA851", hover_color="#25D366", text_color="black", font=("Consolas", 12, "bold"))
         self.btn_wa_bot_start.pack(side="left", padx=(0, 10))
         
-        self.btn_wa_bot_stop = ctk.CTkButton(row_bot, text="⛔ STOP", command=self.stop_wa_autoresponder, fg_color="#7a0000", hover_color="#cc0000", font=("Consolas", 11, "bold"), width=80, state="disabled")
+        self.btn_wa_bot_stop = ctk.CTkButton(row_bot, corner_radius=8, text="⛔ STOP", command=self.stop_wa_autoresponder, fg_color="#7a0000", hover_color="#cc0000", font=("Consolas", 11, "bold"), width=80, state="disabled")
         self.btn_wa_bot_stop.pack(side="left")
         
         self.lbl_wa_bot_status = ctk.CTkLabel(row_bot, text="READY", font=("Consolas", 11), text_color="gray")
@@ -1312,7 +1465,7 @@ class App(ctk.CTk):
         self.entry_scrape_fields.pack(fill="x", padx=10, pady=(0,10))
         self.entry_scrape_fields.insert("0.0", "Name=h2\nPrice=.price\nLink=a")
         
-        btn_scrape = ctk.CTkButton(frame_cfg, text="INITIATE SCRAPE", command=self.start_scraping, fg_color=COLOR_ACCENT, text_color="black")
+        btn_scrape = ctk.CTkButton(frame_cfg, corner_radius=8, text="INITIATE SCRAPE", command=self.start_scraping, fg_color=COLOR_ACCENT, text_color="black")
         btn_scrape.pack(fill="x", padx=10, pady=10)
         
         self.lbl_scrape_status = ctk.CTkLabel(parent, text="READY", font=("Consolas", 12))
@@ -1766,7 +1919,7 @@ class App(ctk.CTk):
         if not self.voice_available: return
         if self.is_listening:
             self.is_listening = False
-            self.btn_voice.configure(text="🎤 VOX: OFF", fg_color=COLOR_PANEL, border_color="#555", text_color="white")
+            self.btn_voice.configure(text="🎤 VOX: OFF", fg_color=COLOR_PANEL, border_color="#1e1e38", text_color="white")
             self.log("AUDIO INPUT SEVERED.")
         else:
             self.is_listening = True
@@ -1781,7 +1934,7 @@ class App(ctk.CTk):
                 self.update_log_from_thread(f"VOICE INPUT: {command}")
                 if "stop listening" in command:
                      self.is_listening = False
-                     self.after(0, lambda: self.btn_voice.configure(text="🎤 VOX: OFF", fg_color=COLOR_PANEL, border_color="#555", text_color="white"))
+                     self.after(0, lambda: self.btn_voice.configure(text="🎤 VOX: OFF", fg_color=COLOR_PANEL, border_color="#1e1e38", text_color="white"))
                      self.update_log_from_thread("VOX TERMINATED BY USER.")
                      break
                 
@@ -2110,15 +2263,15 @@ class App(ctk.CTk):
         btn_frame = ctk.CTkFrame(frame_controls, fg_color="transparent")
         btn_frame.pack(fill="x", padx=10, pady=10)
         
-        self.btn_start_trading = ctk.CTkButton(btn_frame, text="▶ START TRADING", command=self.start_trading, fg_color=COLOR_SUCCESS, hover_color="#00cc00", text_color="black", font=("Consolas", 12, "bold"))
+        self.btn_start_trading = ctk.CTkButton(btn_frame, corner_radius=8, text="▶ START TRADING", command=self.start_trading, fg_color=COLOR_SUCCESS, hover_color="#00cc00", text_color="black", font=("Consolas", 12, "bold"))
         self.btn_start_trading.pack(fill="x", pady=5)
         
-        self.btn_stop_trading = ctk.CTkButton(btn_frame, text="⏹ STOP TRADING", command=self.stop_trading, fg_color=COLOR_ERROR, hover_color="#cc0000", text_color="white", font=("Consolas", 12, "bold"))
+        self.btn_stop_trading = ctk.CTkButton(btn_frame, corner_radius=8, text="⏹ STOP TRADING", command=self.stop_trading, fg_color=COLOR_ERROR, hover_color="#cc0000", text_color="white", font=("Consolas", 12, "bold"))
         self.btn_stop_trading.pack(fill="x", pady=5)
         self.btn_stop_trading.configure(state="disabled")
         
         # Emergency Stop
-        self.btn_emergency_stop = ctk.CTkButton(frame_controls, text="🚨 EMERGENCY STOP", command=self.emergency_stop, fg_color="#ff0000", hover_color="#990000", text_color="white", font=("Consolas", 14, "bold"), height=50)
+        self.btn_emergency_stop = ctk.CTkButton(frame_controls, corner_radius=8, text="🚨 EMERGENCY STOP", command=self.emergency_stop, fg_color="#ff0000", hover_color="#770022", text_color="white", font=("Consolas", 14, "bold"), height=50)
         self.btn_emergency_stop.pack(fill="x", padx=10, pady=20)
         
         # Right Panel: Dashboard
@@ -2520,10 +2673,10 @@ class App(ctk.CTk):
         frame_ctrl = ctk.CTkFrame(frame_goal, fg_color="transparent")
         frame_ctrl.pack(fill="x", padx=10, pady=(0, 10))
         
-        self.btn_start_agent = ctk.CTkButton(frame_ctrl, text="🚀 INITIALIZE AGENT", command=self.start_agent_orchestrator, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black", font=("Consolas", 12, "bold"))
+        self.btn_start_agent = ctk.CTkButton(frame_ctrl, corner_radius=8, text="🚀 INITIALIZE AGENT", command=self.start_agent_orchestrator, fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black", font=("Consolas", 12, "bold"))
         self.btn_start_agent.pack(side="left", padx=5)
         
-        self.btn_stop_agent = ctk.CTkButton(frame_ctrl, text="⛔ STOP AGENT", command=self.stop_agent_orchestrator, fg_color=COLOR_ERROR, hover_color="#990000", text_color="white", state="disabled", font=("Consolas", 12, "bold"))
+        self.btn_stop_agent = ctk.CTkButton(frame_ctrl, corner_radius=8, text="⛔ STOP AGENT", command=self.stop_agent_orchestrator, fg_color=COLOR_ERROR, hover_color="#770022", text_color="white", state="disabled", font=("Consolas", 12, "bold"))
         self.btn_stop_agent.pack(side="left", padx=5)
         
         # Live Thoughts Console
@@ -2577,7 +2730,414 @@ class App(ctk.CTk):
         self.agent_console.see("end")
         self.agent_console.configure(state="disabled")
 
+    # ══════════════════════════════════════════════════════════════════════════
+    #  BIZ SCRAPER TAB
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _setup_biz_scraper_tab(self):
+        parent = self.tab_biz
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(2, weight=1)
+
+        # ── Header ──────────────────────────────────────────────────────────
+        hdr = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10,
+                           border_color=COLOR_BORDER, border_width=1)
+        hdr.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        hdr.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            hdr,
+            text="🗂️  INTELLIGENT BUSINESS SCRAPER",
+            font=ctk.CTkFont(family="Consolas", size=20, weight="bold"),
+            text_color=COLOR_ACCENT
+        ).grid(row=0, column=0, sticky="w", padx=20, pady=12)
+
+        ctk.CTkLabel(
+            hdr,
+            text="Google Maps  ·  LinkedIn  ·  Instagram  →  Excel / CSV",
+            font=("Consolas", 11),
+            text_color=COLOR_GOLD
+        ).grid(row=0, column=1, sticky="e", padx=20)
+
+        # ── Control Panel ───────────────────────────────────────────────────
+        ctrl = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10,
+                            border_color=COLOR_BORDER, border_width=1)
+        ctrl.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        ctrl.grid_columnconfigure(1, weight=1)
+
+        # Source selector (row 0)
+        src_row = ctk.CTkFrame(ctrl, fg_color="transparent")
+        src_row.grid(row=0, column=0, columnspan=3, sticky="ew", padx=15, pady=(12, 4))
+
+        ctk.CTkLabel(src_row, text="DATA SOURCE:", font=("Consolas", 11, "bold"),
+                     text_color=COLOR_TEXT_DIM).pack(side="left", padx=(0, 12))
+
+        self.biz_src_maps = ctk.CTkCheckBox(
+            src_row, text="🗺  Google Maps",
+            font=("Consolas", 11, "bold"), text_color=COLOR_ACCENT,
+            checkmark_color=COLOR_ACCENT, fg_color=COLOR_ACCENT, hover_color=COLOR_PANEL2
+        )
+        self.biz_src_maps.pack(side="left", padx=10)
+        self.biz_src_maps.select()
+
+        self.biz_src_linkedin = ctk.CTkCheckBox(
+            src_row, text="💼  LinkedIn",
+            font=("Consolas", 11, "bold"), text_color="#0077b5",
+            checkmark_color="#0077b5", fg_color="#0077b5", hover_color=COLOR_PANEL2
+        )
+        self.biz_src_linkedin.pack(side="left", padx=10)
+
+        self.biz_src_instagram = ctk.CTkCheckBox(
+            src_row, text="📸  Instagram",
+            font=("Consolas", 11, "bold"), text_color="#e1306c",
+            checkmark_color="#e1306c", fg_color="#e1306c", hover_color=COLOR_PANEL2
+        )
+        self.biz_src_instagram.pack(side="left", padx=10)
+
+        self.biz_ai_enrich = ctk.CTkCheckBox(
+            src_row, text="🧠  AI Enrich",
+            font=("Consolas", 11, "bold"), text_color=COLOR_GOLD,
+            checkmark_color=COLOR_GOLD, fg_color=COLOR_GOLD, hover_color=COLOR_PANEL2
+        )
+        self.biz_ai_enrich.pack(side="left", padx=20)
+
+        # Query + max results (row 1)
+        query_row = ctk.CTkFrame(ctrl, fg_color="transparent")
+        query_row.grid(row=1, column=0, columnspan=3, sticky="ew", padx=15, pady=4)
+        query_row.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(query_row, text="SEARCH QUERY:", font=("Consolas", 11, "bold"),
+                     text_color=COLOR_TEXT_DIM).grid(row=0, column=0, sticky="w", padx=(0, 10))
+
+        self.biz_entry_query = ctk.CTkEntry(
+            query_row,
+            placeholder_text='e.g.  "restaurants in Lahore"  or  "#fashion"  or  "AI startup"',
+            font=("Consolas", 12),
+            fg_color=COLOR_LOG, border_color=COLOR_BORDER,
+            text_color=COLOR_TEXT, placeholder_text_color=COLOR_TEXT_DIM,
+            height=36
+        )
+        self.biz_entry_query.grid(row=0, column=1, sticky="ew", padx=(0, 15))
+
+        ctk.CTkLabel(query_row, text="MAX:", font=("Consolas", 11, "bold"),
+                     text_color=COLOR_TEXT_DIM).grid(row=0, column=2, sticky="e", padx=(0, 5))
+
+        self.biz_max_results = ctk.CTkEntry(
+            query_row, width=60, font=("Consolas", 12),
+            fg_color=COLOR_LOG, border_color=COLOR_BORDER, text_color=COLOR_TEXT
+        )
+        self.biz_max_results.insert(0, "30")
+        self.biz_max_results.grid(row=0, column=3, padx=(0, 5))
+
+        # Action buttons (row 2)
+        btn_row = ctk.CTkFrame(ctrl, fg_color="transparent")
+        btn_row.grid(row=2, column=0, columnspan=3, sticky="ew", padx=15, pady=(4, 12))
+
+        self.biz_btn_scrape = ctk.CTkButton(
+            btn_row, text="▶  SCRAPE NOW", command=self._biz_start_scrape,
+            corner_radius=8, height=38,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+            text_color="#000000", font=("Consolas", 13, "bold"), width=160
+        )
+        self.biz_btn_scrape.pack(side="left", padx=(0, 10))
+
+        self.biz_btn_stop = ctk.CTkButton(
+            btn_row, text="⏹  STOP", command=self._biz_stop_scrape,
+            corner_radius=8, height=38,
+            fg_color=COLOR_PANEL2, border_color=COLOR_ERROR, border_width=1,
+            hover_color="#1a0010", text_color=COLOR_ERROR, font=("Consolas", 13, "bold"), width=100
+        )
+        self.biz_btn_stop.pack(side="left", padx=5)
+
+        self.biz_status_lbl = ctk.CTkLabel(
+            btn_row, text="● READY", font=("Consolas", 11, "bold"),
+            text_color=COLOR_SUCCESS
+        )
+        self.biz_status_lbl.pack(side="left", padx=20)
+
+        self.biz_count_lbl = ctk.CTkLabel(
+            btn_row, text="0 records", font=("Consolas", 11),
+            text_color=COLOR_TEXT_DIM
+        )
+        self.biz_count_lbl.pack(side="left", padx=5)
+
+        # ── Main Body: Log + Results side by side ────────────────────────────
+        body = ctk.CTkFrame(parent, fg_color="transparent")
+        body.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
+        body.grid_columnconfigure(0, weight=1)
+        body.grid_columnconfigure(1, weight=2)
+        body.grid_rowconfigure(0, weight=1)
+
+        # Live scrape log
+        log_frame = ctk.CTkFrame(body, fg_color=COLOR_PANEL,
+                                  corner_radius=10, border_color=COLOR_BORDER, border_width=1)
+        log_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        log_frame.grid_rowconfigure(1, weight=1)
+        log_frame.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(log_frame, text="LIVE LOG", font=("Consolas", 11, "bold"),
+                     text_color=COLOR_TEXT_DIM).grid(row=0, column=0, sticky="w", padx=10, pady=6)
+
+        self.biz_log_box = ctk.CTkTextbox(
+            log_frame, font=("Consolas", 10),
+            fg_color=COLOR_LOG, text_color=COLOR_SUCCESS,
+            corner_radius=6, scrollbar_button_color=COLOR_PANEL2
+        )
+        self.biz_log_box.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        self.biz_log_box.insert("end", ">> SCRAPER READY.\n")
+        self.biz_log_box.configure(state="disabled")
+
+        # Results table
+        results_frame = ctk.CTkFrame(body, fg_color=COLOR_PANEL,
+                                      corner_radius=10, border_color=COLOR_BORDER, border_width=1)
+        results_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
+        results_frame.grid_rowconfigure(1, weight=1)
+        results_frame.grid_columnconfigure(0, weight=1)
+
+        res_hdr = ctk.CTkFrame(results_frame, fg_color="transparent")
+        res_hdr.grid(row=0, column=0, sticky="ew", padx=10, pady=6)
+
+        ctk.CTkLabel(res_hdr, text="RESULTS TABLE", font=("Consolas", 11, "bold"),
+                     text_color=COLOR_TEXT_DIM).pack(side="left")
+
+        self.biz_results_table = ctk.CTkScrollableFrame(
+            results_frame, fg_color=COLOR_LOG,
+            corner_radius=6, scrollbar_button_color=COLOR_PANEL2
+        )
+        self.biz_results_table.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        self.biz_results_table.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
+
+        self._biz_draw_table_header()
+
+        # ── Export Panel ─────────────────────────────────────────────────────
+        export_frame = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10,
+                                     border_color=COLOR_BORDER, border_width=1)
+        export_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=(5, 10))
+        export_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(export_frame, text="EXPORT:", font=("Consolas", 11, "bold"),
+                     text_color=COLOR_TEXT_DIM).grid(row=0, column=0, sticky="w", padx=15, pady=10)
+
+        self.biz_export_path = ctk.CTkEntry(
+            export_frame,
+            placeholder_text="Save path (e.g. C:\\Users\\Me\\Desktop\\businesses.xlsx)",
+            font=("Consolas", 11), fg_color=COLOR_LOG, border_color=COLOR_BORDER,
+            text_color=COLOR_TEXT, placeholder_text_color=COLOR_TEXT_DIM
+        )
+        self.biz_export_path.grid(row=0, column=1, sticky="ew", padx=10, pady=10)
+
+        ctk.CTkButton(
+            export_frame, text="📊 EXCEL (.xlsx)",
+            command=self._biz_export_excel,
+            corner_radius=8, height=34,
+            fg_color=COLOR_SUCCESS, hover_color="#007744",
+            text_color="#000", font=("Consolas", 11, "bold"), width=140
+        ).grid(row=0, column=2, padx=5, pady=10)
+
+        ctk.CTkButton(
+            export_frame, text="📄 CSV",
+            command=self._biz_export_csv,
+            corner_radius=8, height=34,
+            fg_color=COLOR_PANEL2, border_color=COLOR_ACCENT, border_width=1,
+            hover_color=COLOR_PANEL, text_color=COLOR_ACCENT,
+            font=("Consolas", 11, "bold"), width=80
+        ).grid(row=0, column=3, padx=(0, 15), pady=10)
+
+    # ── BIZ SCRAPER: Internal helpers ──────────────────────────────────────────
+
+    def _biz_log(self, msg: str):
+        """Append a message to the live log textbox."""
+        try:
+            self.biz_log_box.configure(state="normal")
+            self.biz_log_box.insert("end", f"{msg}\n")
+            self.biz_log_box.see("end")
+            self.biz_log_box.configure(state="disabled")
+        except Exception:
+            pass
+
+    def _biz_draw_table_header(self):
+        """Draw the results table column headers."""
+        headers = ["#", "Name", "Category", "Address / Platform", "Rating / Followers", "Website / URL"]
+        widths   = [30,  160,   120,         200,                  120,                  180]
+        for col, (h, w) in enumerate(zip(headers, widths)):
+            lbl = ctk.CTkLabel(
+                self.biz_results_table,
+                text=h,
+                font=("Consolas", 10, "bold"),
+                text_color=COLOR_ACCENT,
+                fg_color=COLOR_PANEL2,
+                corner_radius=4,
+                width=w
+            )
+            lbl.grid(row=0, column=col, padx=2, pady=2, sticky="ew")
+
+    def _biz_populate_table(self, records: list):
+        """Refresh the results table with scraped records."""
+        # Clear existing rows (keep header row=0)
+        for widget in self.biz_results_table.winfo_children():
+            info = widget.grid_info()
+            if info and int(info.get("row", 0)) > 0:
+                widget.destroy()
+
+        # Columns to display in the table
+        DISPLAY = ["Name", "Category", "Address", "Rating", "Website"]
+        widths   = [160,   120,        200,        120,      180]
+
+        for row_idx, rec in enumerate(records, start=1):
+            row_bg = COLOR_PANEL2 if row_idx % 2 == 0 else COLOR_LOG
+
+            # Row number
+            ctk.CTkLabel(
+                self.biz_results_table, text=str(row_idx),
+                font=("Consolas", 9), text_color=COLOR_TEXT_DIM,
+                fg_color=row_bg, width=30
+            ).grid(row=row_idx, column=0, padx=2, pady=1, sticky="ew")
+
+            for col_idx, (field, w) in enumerate(zip(DISPLAY, widths), start=1):
+                val = rec.get(field, "") or rec.get("Followers", "") or ""
+                # For review/followers column, prefer rating then followers
+                if field == "Rating" and not val:
+                    val = rec.get("Followers", "")
+                # For website, prefer website then LinkedIn then Instagram
+                if field == "Website" and not val:
+                    val = rec.get("LinkedIn", "") or rec.get("Instagram", "")
+
+                display_val = str(val)[:40] if val else "—"
+                ctk.CTkLabel(
+                    self.biz_results_table, text=display_val,
+                    font=("Consolas", 9), text_color=COLOR_TEXT,
+                    fg_color=row_bg, width=w, anchor="w"
+                ).grid(row=row_idx, column=col_idx, padx=2, pady=1, sticky="ew")
+
+        # Update count label
+        src_tags = list(set(r.get("Source", "?") for r in records))
+        self.biz_count_lbl.configure(text=f"{len(records)} records  [{', '.join(src_tags)}]")
+
+    def _biz_start_scrape(self):
+        """Launch the scrape in a background thread."""
+        query = self.biz_entry_query.get().strip()
+        if not query:
+            self._biz_log("[ERROR] Please enter a search query.")
+            return
+
+        try:
+            max_r = int(self.biz_max_results.get().strip())
+        except ValueError:
+            max_r = 30
+
+        sources = []
+        if self.biz_src_maps.get():     sources.append("maps")
+        if self.biz_src_linkedin.get(): sources.append("linkedin")
+        if self.biz_src_instagram.get(): sources.append("instagram")
+
+        if not sources:
+            self._biz_log("[ERROR] Select at least one data source.")
+            return
+
+        # Check browser
+        if not getattr(self.agent, "page", None):
+            self._biz_log("[ERROR] Browser not started. Click 'INITIALIZE BROWSER' first (Command Center).")
+            return
+
+        self.biz_btn_scrape.configure(state="disabled")
+        self.biz_status_lbl.configure(text="● SCRAPING…", text_color=COLOR_WARN)
+        self.biz_scraper._stop_requested = False
+        self._biz_results = []
+
+        do_enrich = bool(self.biz_ai_enrich.get()) and self.use_ai
+
+        threading.Thread(
+            target=self._biz_scrape_thread,
+            args=(query, max_r, sources, do_enrich),
+            daemon=True
+        ).start()
+
+    def _biz_scrape_thread(self, query, max_r, sources, do_enrich):
+        """Background thread that runs the async scrape coroutines."""
+        import asyncio
+
+        async def run():
+            records = []
+            if "maps" in sources:
+                maps_records = await self.biz_scraper.scrape_google_maps(query, max_r)
+                records.extend(maps_records)
+            if "linkedin" in sources:
+                linkedin_records = await self.biz_scraper.scrape_linkedin_companies(query, max_r)
+                records.extend(linkedin_records)
+            if "instagram" in sources:
+                insta_records = await self.biz_scraper.scrape_instagram_profiles(query, max_r)
+                records.extend(insta_records)
+            return records
+
+        try:
+            records = asyncio.run_coroutine_threadsafe(run(), self.loop).result(timeout=300)
+        except Exception as e:
+            self.after(0, lambda: self._biz_log(f"[FATAL] {e}"))
+            records = []
+
+        if do_enrich and records:
+            self._biz_log("[AI] Starting AI enrichment pass...")
+            records = self.biz_scraper.enrich_with_ai(records)
+
+        self._biz_results = records
+        self.after(0, lambda: self._biz_populate_table(records))
+        self.after(0, lambda: self.biz_status_lbl.configure(
+            text=f"● DONE  ({len(records)} results)", text_color=COLOR_SUCCESS
+        ))
+        self.after(0, lambda: self.biz_btn_scrape.configure(state="normal"))
+
+    def _biz_stop_scrape(self):
+        self.biz_scraper.stop()
+        self.biz_status_lbl.configure(text="● STOPPING…", text_color=COLOR_ERROR)
+        self._biz_log("[USER] Stop requested.")
+
+    def _biz_export_excel(self):
+        import os
+        path = self.biz_export_path.get().strip()
+        if not path:
+            # Default desktop path
+            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+            from datetime import datetime
+            fname = f"businesses_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            path = os.path.join(desktop, fname)
+            self.biz_export_path.insert(0, path)
+
+        if not self._biz_results:
+            self._biz_log("[EXPORT] No data to export. Run a scrape first.")
+            return
+
+        ok = self.biz_scraper.export_to_excel(self._biz_results, path)
+        if ok:
+            self.biz_status_lbl.configure(text="● EXPORTED ✓", text_color=COLOR_SUCCESS)
+        else:
+            self.biz_status_lbl.configure(text="● EXPORT FAILED", text_color=COLOR_ERROR)
+
+    def _biz_export_csv(self):
+        import os
+        path = self.biz_export_path.get().strip()
+        if not path:
+            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+            from datetime import datetime
+            fname = f"businesses_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            path = os.path.join(desktop, fname)
+            self.biz_export_path.insert(0, path)
+        else:
+            # Force .csv extension
+            if not path.lower().endswith(".csv"):
+                path = os.path.splitext(path)[0] + ".csv"
+
+        if not self._biz_results:
+            self._biz_log("[EXPORT] No data to export. Run a scrape first.")
+            return
+
+        ok = self.biz_scraper.export_to_csv(self._biz_results, path)
+        if ok:
+            self.biz_status_lbl.configure(text="● CSV EXPORTED ✓", text_color=COLOR_SUCCESS)
+        else:
+            self.biz_status_lbl.configure(text="● EXPORT FAILED", text_color=COLOR_ERROR)
+
 if __name__ == "__main__":
+
     app = App()
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
     app.mainloop()

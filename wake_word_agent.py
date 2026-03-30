@@ -1,7 +1,7 @@
 """
 wake_word_agent.py
 Always-listening wake word detection for hands-free activation.
-Listens for "Hey Automater" in the background — no button press needed.
+Listens for "Hey Omni" in the background — no button press needed.
 """
 
 import threading
@@ -30,7 +30,7 @@ except ImportError:
 
 class WakeWordAgent:
     """
-    Listens for the wake phrase "Hey Automater" 24/7.
+    Listens for the wake phrase "Hey Omni" 24/7.
     Uses pvporcupine (Picovoice) if configured, otherwise falls back to 
     SpeechRecognition keyword detection.
     """
@@ -41,7 +41,7 @@ class WakeWordAgent:
 
         self.is_running = False
         self.thread = None
-        self.wake_word_phrase = "hey automater"
+        self.wake_word_phrase = "hey omni"
 
     def start(self) -> str:
         if self.is_running:
@@ -64,7 +64,7 @@ class WakeWordAgent:
             return "Error: Neither pvporcupine nor speech_recognition are available."
 
         self.thread.start()
-        return f"👂 Wake word listener ACTIVE ({mode}). Say 'Hey Automater' to trigger!"
+        return f"👂 Wake word listener ACTIVE ({mode}). Say 'Hey Omni' to trigger!"
 
     def stop(self):
         self.is_running = False
@@ -77,7 +77,7 @@ class WakeWordAgent:
         try:
             porcupine = pvporcupine.create(
                 access_key=self.picovoice_key,
-                keywords=["hey siri"]  # fallback built-in; custom "hey automater" needs custom model
+                keywords=["hey siri"]  # fallback built-in; custom "hey omni" needs custom model
             )
             pa = pyaudio.PyAudio()
             stream = pa.open(
@@ -108,7 +108,7 @@ class WakeWordAgent:
                 porcupine.delete()
 
     def _sr_fallback_loop(self):
-        """Fallback: Uses SpeechRecognition to detect 'hey automater' phrase."""
+        """Fallback: Uses SpeechRecognition to detect 'hey omni' phrase."""
         if not SR_AVAILABLE:
             self.is_running = False
             return
@@ -117,7 +117,7 @@ class WakeWordAgent:
         recognizer.energy_threshold = 300
         recognizer.dynamic_energy_threshold = True
 
-        print("[WAKE] Listening for 'Hey Automater'...")
+        print("[WAKE] Listening for 'Hey Omni'...")
 
         while self.is_running:
             try:
@@ -144,7 +144,7 @@ class WakeWordAgent:
 
     def _trigger(self):
         """Called when wake word is detected — fires the GUI callback."""
-        print("🎙️ [WAKE WORD TRIGGERED] Neural Automater activated!")
+        print("🎙️ [WAKE WORD TRIGGERED] OMNI activated!")
         if self.callback:
             self.callback()
 

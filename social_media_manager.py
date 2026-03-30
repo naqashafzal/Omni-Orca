@@ -102,12 +102,12 @@ class SocialMediaManager:
             await asyncio.sleep(random.uniform(0.1, 0.3))
 
     async def _random_scroll(self):
-        """Perform human-like random scrolling."""
-        scrolls = random.randint(1, 3)
+        """Perform human-like random scrolling (fast)."""
+        scrolls = random.randint(1, 2)
         for _ in range(scrolls):
-            direction = random.choice([200, 300, 400, -150, -200])
+            direction = random.choice([300, 400, -150])
             await self.browser.page.mouse.wheel(0, direction)
-            await asyncio.sleep(random.uniform(0.4, 1.0))
+            await asyncio.sleep(random.uniform(0.2, 0.5))
 
     async def _extract_tweet_text(self) -> str:
         """Extract the actual tweet text from the current page."""
@@ -146,7 +146,7 @@ class SocialMediaManager:
         self,
         keywords,
         max_replies=5,
-        delay_range=(30, 90),
+        delay_range=(8, 20),   # ← was (30, 90) — 30-90s per reply = way too slow!
         mode="AI",
         prompt_context="",
         progress_callback=None,
@@ -189,10 +189,10 @@ class SocialMediaManager:
             search_url = f"https://x.com/search?q={kw.strip().replace(' ', '%20')}&f=live"
             try:
                 await self.browser.navigate(search_url)
-                # Twitter is heavy and uses React client-side rendering. Wait for tweets to appear.
-                cb("⏳ Waiting for X/Twitter to load search results...")
-                await self.browser.page.wait_for_selector("article", timeout=15000)
-                await asyncio.sleep(2)
+                # Twitter uses React client-side rendering. Wait for tweets.
+                cb("⏳ Waiting for X/Twitter to load...")
+                await self.browser.page.wait_for_selector("article", timeout=12000)
+                await asyncio.sleep(1)  # short settle time
             except Exception as e:
                 cb(f"⚠️ Navigation/Load error: {e}")
                 continue
@@ -287,8 +287,8 @@ class SocialMediaManager:
                     cb(f"✅ Reply {replies_count}/{max_replies} posted!")
 
                     wait = random.uniform(delay_range[0], delay_range[1])
-                    cb(f"⏳ Waiting {int(wait)}s before next reply...")
-                    # Break the sleep into chunks so stop_bot can interrupt
+                    cb(f"⏳ Waiting {int(wait)}s before next reply (anti-rate-limit)...")
+                    # Break sleep into 1s chunks so stop_bot can interrupt
                     for _ in range(int(wait)):
                         if self._stop_bot:
                             break

@@ -53,3 +53,6 @@ cryptography
 
 # Utilities
 python-dotenv
+
+# Business Scraper
+openpyxl
