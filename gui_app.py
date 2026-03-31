@@ -380,14 +380,22 @@ class App(ctk.CTk):
         self.btn_close = ctk.CTkButton(self.panel_core, corner_radius=8, text="■  TERMINATE SESSION", command=self.close_browser, fg_color=COLOR_PANEL, border_color=COLOR_ERROR, border_width=1, hover_color="#1a0010", text_color=COLOR_ERROR, font=("Consolas", 12, "bold"))
         self.btn_close.pack(fill="x", padx=10, pady=5)
 
-        # Right Panel: Memory
+        # Right Panel: Memory (Teach By Doing)
         self.panel_rec = ctk.CTkFrame(self.dashboard_frame, fg_color=COLOR_PANEL, corner_radius=10, border_color=COLOR_BORDER, border_width=1)
         self.panel_rec.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
         ctk.CTkLabel(self.panel_rec, text="MEMORY MODULE", font=("Consolas", 12, "bold"), text_color=COLOR_TEXT_DIM).pack(pady=5)
-        self.btn_rec_save = ctk.CTkButton(self.panel_rec, corner_radius=8, text="⤓ SAVE SEQUENCE", command=self.save_recording, fg_color=COLOR_PANEL, border_color=COLOR_ACCENT, border_width=1, text_color=COLOR_ACCENT, hover_color=COLOR_PANEL2)
-        self.btn_rec_save.pack(side="left", fill="both", expand=True, padx=5, pady=10)
-        self.btn_replay = ctk.CTkButton(self.panel_rec, corner_radius=8, text="▶ EXECUTE REPLAY", command=self.replay_recording, fg_color=COLOR_PANEL, border_color=COLOR_SUCCESS, border_width=1, text_color=COLOR_SUCCESS, hover_color=COLOR_PANEL2)
-        self.btn_replay.pack(side="right", fill="both", expand=True, padx=5, pady=10)
+        
+        row_mem = ctk.CTkFrame(self.panel_rec, fg_color="transparent")
+        row_mem.pack(fill="both", expand=True, padx=5, pady=10)
+        
+        self.btn_rec_start = ctk.CTkButton(row_mem, corner_radius=8, text="🔴 TRAIN", command=self.start_recording, fg_color="#7a0000", hover_color="#cc0000", text_color="white", font=("Consolas", 11, "bold"))
+        self.btn_rec_start.pack(side="left", fill="x", expand=True, padx=2)
+        
+        self.btn_rec_save = ctk.CTkButton(row_mem, corner_radius=8, text="⤓ SAVE", command=self.save_recording, fg_color=COLOR_PANEL, border_color=COLOR_ACCENT, border_width=1, text_color=COLOR_ACCENT, hover_color=COLOR_PANEL2)
+        self.btn_rec_save.pack(side="left", fill="x", expand=True, padx=2)
+        
+        self.btn_replay = ctk.CTkButton(row_mem, corner_radius=8, text="▶ REPLAY", command=self.replay_recording, fg_color=COLOR_PANEL, border_color=COLOR_SUCCESS, border_width=1, text_color=COLOR_SUCCESS, hover_color=COLOR_PANEL2)
+        self.btn_replay.pack(side="left", fill="x", expand=True, padx=2)
 
         # 3. Log Console
         self.log_textbox = ctk.CTkTextbox(
@@ -1951,9 +1959,18 @@ class App(ctk.CTk):
             self.update_log_from_thread(f"NAV ERROR: {e}")
 
     # --- Recorder ---
+    def start_recording(self):
+        if not self.agent.page:
+            self.log("ERROR: INITIALIZE BROWSER FIRST BEFORE TRAINING.")
+            return
+        self.agent.start_recording("User Trained Sequence")
+        self.log("🔴 TRAINING MODE ACTIVE. DO THE TASK IN THE BROWSER. OMNI IS WATCHING...")
+        self.btn_rec_start.configure(text="RECORDING...", fg_color="#cc0000")
+
     def save_recording(self):
         self.agent.save_recording("recording.json")
-        self.log("SEQUENCE SAVED TO DISK.")
+        self.log("✅ TRAINING SAVED. SEQUENCE MEMORIZED.")
+        self.btn_rec_start.configure(text="🔴 TRAIN", fg_color="#7a0000")
 
     def replay_recording(self):
         self.log("EXECUTING STORED SEQUENCE...")
@@ -3006,8 +3023,8 @@ class App(ctk.CTk):
 
     def _biz_draw_table_header(self):
         """Draw the results table column headers."""
-        headers = ["#", "Name", "Category", "Address / Platform", "Rating / Followers", "Website / URL"]
-        widths   = [30,  160,   120,         200,                  120,                  180]
+        headers = ["#", "Name", "Category", "Address / Platform", "Rating / Followers", "Phone", "Website / URL"]
+        widths   = [30,  140,   110,         160,                  90,                   100,     180]
         for col, (h, w) in enumerate(zip(headers, widths)):
             lbl = ctk.CTkLabel(
                 self.biz_results_table,
@@ -3029,8 +3046,8 @@ class App(ctk.CTk):
                 widget.destroy()
 
         # Columns to display in the table
-        DISPLAY = ["Name", "Category", "Address", "Rating", "Website"]
-        widths   = [160,   120,        200,        120,      180]
+        DISPLAY = ["Name", "Category", "Address", "Rating", "Phone", "Website"]
+        widths   = [140,   110,        160,        90,       100,     180]
 
         for row_idx, rec in enumerate(records, start=1):
             row_bg = COLOR_PANEL2 if row_idx % 2 == 0 else COLOR_LOG

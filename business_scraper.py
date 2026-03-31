@@ -184,10 +184,28 @@ class BusinessScraper:
 
             # Phone
             try:
-                phone_el = await page.query_selector("button[data-tooltip='Copy phone number']")
+                # Primary: Map's robust data-item-id
+                phone_el = await page.query_selector("button[data-item-id^='phone:']")
+                if not phone_el:
+                    # Fallback: Tooltip
+                    phone_el = await page.query_selector("button[data-tooltip*='phone' i]")
+                    
                 if phone_el:
-                    phone_text = (await phone_el.get_attribute("aria-label") or "")
-                    rec["Phone"] = re.sub(r"Phone:\s*", "", phone_text).strip()
+                    # Try to extract the clean tel: link first
+                    item_id = await phone_el.get_attribute("data-item-id") or ""
+                    if "tel:" in item_id:
+                        rec["Phone"] = item_id.split("tel:")[-1].strip()
+                    else:
+                        # Fallback to visible text
+                        text = (await phone_el.inner_text()).strip()
+                        if "\n" in text:
+                            rec["Phone"] = text.split("\n")[0].strip()
+                        elif text:
+                            rec["Phone"] = text
+                        else:
+                            # Final fallback: aria-label
+                            lbl = await phone_el.get_attribute("aria-label") or ""
+                            rec["Phone"] = re.sub(r"(Phone:|Call)\s*", "", lbl, flags=re.IGNORECASE).strip()
             except Exception:
                 pass
 

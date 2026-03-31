@@ -14,6 +14,7 @@ class BrowserAgent:
             "start_time": None,
             "success": False
         }
+        self.is_listening_to_human = False
 
     async def start(self):
         """Starts the browser session."""
@@ -35,14 +36,59 @@ class BrowserAgent:
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
         self.page = self.browser.pages[0] if self.browser.pages else await self.browser.new_page()
+        # Enable Python-JS bridge for organic human recording
+        await self.browser.contexts[0].expose_binding("report_organic_action", self._handle_organic_action)
         
-        # Stealth scripts
+        # Stealth and tracking scripts
         await self.page.add_init_script("""
+            // Stealth
             Object.defineProperty(navigator, 'webdriver', {
                 get: () => undefined
             });
+
+            // Human action tracker
+            document.addEventListener('click', (e) => {
+                if (!window._omni_is_recording) return;
+                
+                // Attempt to generate a unique CSS selector for what the user clicked
+                let el = e.target;
+                let selector = el.tagName.toLowerCase();
+                if (el.id) selector += '#' + el.id;
+                else if (el.className && typeof el.className === 'string') 
+                    selector += '.' + el.className.trim().replace(/\\s+/g, '.');
+                
+                // Exclude clicks on the main body/html if accidental
+                if (selector !== 'html' && selector !== 'body') {
+                    window.report_organic_action({
+                        action: "click",
+                        params: { selector: selector, text: el.innerText ? el.innerText.substring(0, 30) : "" }
+                    });
+                }
+            }, true);
+            
+            document.addEventListener('change', (e) => {
+                if (!window._omni_is_recording) return;
+                let el = e.target;
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    let selector = el.tagName.toLowerCase();
+                    if (el.id) selector += '#' + el.id;
+                    else if (el.name) selector += `[name="${el.name}"]`;
+                    
+                    window.report_organic_action({
+                        action: "type",
+                        params: { selector: selector, text: el.value }
+                    });
+                }
+            });
         """)
-        print("Browser started.")
+        print("Browser started. Human Action Tracker ready.")
+
+    def _handle_organic_action(self, source, payload):
+        """Callback from JS to record organic human actions into the runbook"""
+        if getattr(self, 'is_listening_to_human', False):
+            # Print to log so user sees the system learning
+            print(f"[OMNI WATCHING] Learned action: {payload['action']} -> {payload['params']}")
+            self.record_action(payload['action'], payload['params'])
 
     async def attach_to_existing_browser(self, port=9222) -> bool:
         """Attempts to connect to an existing Chrome instance over CDP."""
@@ -421,16 +467,25 @@ class BrowserAgent:
         """Records an action to the internal list."""
         self.actions.append({"action": action_type, "params": params})
 
-    def start_recording(self, name="Untitled Recording", mode="manual"):
+    def start_recording(self, name="Untitled Training Sequence", mode="manual"):
         """Starts a new recording session."""
         import time
         self.actions = []
+        self.is_listening_to_human = True
         self.recording_metadata = {
             "name": name,
             "mode": mode,
             "start_time": time.time(),
             "success": False
         }
+        
+        # If page is active, tell JS to start listening
+        if self.page:
+            try:
+                # Fire and forget; safe to run synchronous eval if we don't await result
+                import asyncio
+                asyncio.create_task(self.page.evaluate("window._omni_is_recording = true;"))
+            except: pass
 
     def save_recording(self, filename=None, success=True):
         """Saves the recorded actions with metadata to a JSON file."""
@@ -438,6 +493,13 @@ class BrowserAgent:
         import time
         import os
         import re
+        
+        self.is_listening_to_human = False
+        if self.page:
+            try:
+                import asyncio
+                asyncio.create_task(self.page.evaluate("window._omni_is_recording = false;"))
+            except: pass
         
         # Create recordings directory if it doesn't exist
         os.makedirs("recordings", exist_ok=True)
