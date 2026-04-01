@@ -28,7 +28,7 @@ from call_agent import CallAgent
 from wake_word_agent import WakeWordAgent
 from web_search_agent import WebSearchAgent
 from business_scraper import BusinessScraper
-
+import re
 
 # ═══════════════════════════════════════════
 # ELITE DARK THEME  —  Neural Omni V3
@@ -178,7 +178,9 @@ class App(ctk.CTk):
         # Pre-process a 20% opacity watermark image for tab backgrounds
         self.watermark_img = None
         try:
-            pil_img = Image.open("omni_logo.png").convert("RGBA")
+            import os
+            logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_internal_assets", "omni_logo.png")
+            pil_img = Image.open(logo_path).convert("RGBA")
             alpha = pil_img.split()[3]
             alpha = alpha.point(lambda p: int(p * 0.20))  # 20% opacity
             pil_img.putalpha(alpha)
@@ -253,7 +255,9 @@ class App(ctk.CTk):
 
         # Try to load and display the OMNI logo (Made Bigger)
         try:
-            logo_img = ctk.CTkImage(light_image=Image.open("omni_logo.png"), dark_image=Image.open("omni_logo.png"), size=(85, 85))
+            import os
+            logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_internal_assets", "omni_logo.png")
+            logo_img = ctk.CTkImage(light_image=Image.open(logo_path), dark_image=Image.open(logo_path), size=(85, 85))
             logo_lbl = ctk.CTkLabel(footer_frame, image=logo_img, text="")
             logo_lbl.pack(pady=(0, 10))
         except Exception as e:
@@ -1502,31 +1506,216 @@ class App(ctk.CTk):
     def _setup_data_tab(self):
         parent = self.tab_data
         parent.grid_columnconfigure(0, weight=1)
-        
-        ctk.CTkLabel(parent, text="DATA EXTRACTION LAB", font=("Consolas", 18, "bold"), text_color="gray").pack(pady=20)
-        
-        # Config Frame
-        frame_cfg = ctk.CTkFrame(parent, fg_color=COLOR_PANEL)
-        frame_cfg.pack(fill="x", padx=20, pady=10)
-        
-        ctk.CTkLabel(frame_cfg, text="TARGET URL", font=("Consolas", 12)).pack(anchor="w", padx=10, pady=(10,0))
-        self.entry_scrape_url = ctk.CTkEntry(frame_cfg, placeholder_text="https://example.com/products")
-        self.entry_scrape_url.pack(fill="x", padx=10, pady=(0,10))
-        
-        ctk.CTkLabel(frame_cfg, text="ITEM CONTAINER SELECTOR", font=("Consolas", 12)).pack(anchor="w", padx=10)
-        self.entry_scrape_container = ctk.CTkEntry(frame_cfg, placeholder_text="e.g. .product-card")
-        self.entry_scrape_container.pack(fill="x", padx=10, pady=(0,10))
-        
-        ctk.CTkLabel(frame_cfg, text="FIELDS (Format: Name=.selector, Price=.price)", font=("Consolas", 12)).pack(anchor="w", padx=10)
-        self.entry_scrape_fields = ctk.CTkTextbox(frame_cfg, height=100)
-        self.entry_scrape_fields.pack(fill="x", padx=10, pady=(0,10))
-        self.entry_scrape_fields.insert("0.0", "Name=h2\nPrice=.price\nLink=a")
-        
-        btn_scrape = ctk.CTkButton(frame_cfg, corner_radius=8, text="INITIATE SCRAPE", command=self.start_scraping, fg_color=COLOR_ACCENT, text_color="black")
-        btn_scrape.pack(fill="x", padx=10, pady=10)
-        
-        self.lbl_scrape_status = ctk.CTkLabel(parent, text="READY", font=("Consolas", 12))
-        self.lbl_scrape_status.pack(pady=10)
+        parent.grid_rowconfigure(2, weight=1)
+
+        # ── Header
+        hdr = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10,
+                           border_color=COLOR_BORDER, border_width=1)
+        hdr.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        hdr.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(hdr, text="\U0001f52c  DEEP RESEARCH ENGINE",
+                     font=("Consolas", 18, "bold"), text_color=COLOR_ACCENT
+                     ).grid(row=0, column=0, sticky="w", padx=20, pady=12)
+        ctk.CTkLabel(hdr, text="\u25cf AI-POWERED  |  MULTI-SOURCE  |  AUTO-EXPORT",
+                     font=("Consolas", 9), text_color=COLOR_GOLD
+                     ).grid(row=0, column=1, sticky="e", padx=20)
+
+        # ── Config
+        cfg = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10,
+                           border_color=COLOR_BORDER, border_width=1)
+        cfg.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        cfg.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(cfg, text="RESEARCH TOPIC:", font=("Consolas", 11, "bold"),
+                     text_color=COLOR_TEXT_DIM).grid(row=0, column=0, sticky="w", padx=15, pady=(14, 4))
+        self.research_topic = ctk.CTkEntry(cfg,
+            placeholder_text="e.g. 'Impact of AI on healthcare 2025'",
+            font=("Consolas", 12), fg_color=COLOR_LOG,
+            border_color=COLOR_ACCENT, border_width=1, text_color=COLOR_TEXT)
+        self.research_topic.grid(row=0, column=1, sticky="ew", padx=10, pady=(14, 4))
+
+        ctk.CTkLabel(cfg, text="MAX SOURCES:", font=("Consolas", 11),
+                     text_color=COLOR_TEXT_DIM).grid(row=1, column=0, sticky="w", padx=15, pady=4)
+        src_row = ctk.CTkFrame(cfg, fg_color="transparent")
+        src_row.grid(row=1, column=1, sticky="w", padx=10, pady=4)
+        self.research_src_count = ctk.CTkSlider(src_row, from_=2, to=10, number_of_steps=8,
+                                                 width=200, button_color=COLOR_ACCENT,
+                                                 progress_color=COLOR_ACCENT)
+        self.research_src_count.set(6)
+        self.research_src_count.pack(side="left")
+        self.research_src_lbl = ctk.CTkLabel(src_row, text="6 pages",
+                                              font=("Consolas", 11), text_color=COLOR_ACCENT)
+        self.research_src_lbl.pack(side="left", padx=8)
+        self.research_src_count.configure(
+            command=lambda v: self.research_src_lbl.configure(text=f"{int(v)} pages"))
+
+        ctk.CTkLabel(cfg, text="EXPORT FORMAT:", font=("Consolas", 11),
+                     text_color=COLOR_TEXT_DIM).grid(row=2, column=0, sticky="w", padx=15, pady=4)
+        fmt_row = ctk.CTkFrame(cfg, fg_color="transparent")
+        fmt_row.grid(row=2, column=1, sticky="w", padx=10, pady=4)
+        self.research_format = ctk.StringVar(value="Word (.docx)")
+        ctk.CTkRadioButton(fmt_row, text="Word (.docx)",  variable=self.research_format,
+                           value="Word (.docx)", font=("Consolas", 11),
+                           text_color=COLOR_TEXT, fg_color=COLOR_ACCENT).pack(side="left", padx=(0,15))
+        ctk.CTkRadioButton(fmt_row, text="Excel (.xlsx)", variable=self.research_format,
+                           value="Excel (.xlsx)", font=("Consolas", 11),
+                           text_color=COLOR_TEXT, fg_color=COLOR_ACCENT).pack(side="left", padx=(0,15))
+        ctk.CTkRadioButton(fmt_row, text="Both", variable=self.research_format,
+                           value="Both", font=("Consolas", 11),
+                           text_color=COLOR_TEXT, fg_color=COLOR_ACCENT).pack(side="left")
+
+        btn_row = ctk.CTkFrame(cfg, fg_color="transparent")
+        btn_row.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=(8, 14))
+        self.research_btn_start = ctk.CTkButton(btn_row, corner_radius=8,
+            text="\U0001f52c  START DEEP RESEARCH", command=self._research_start,
+            fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER,
+            text_color="#000", font=("Consolas", 13, "bold"), height=38)
+        self.research_btn_start.pack(side="left", padx=(5, 10))
+        ctk.CTkButton(btn_row, corner_radius=8, text="\u26d4 STOP", command=self._research_stop,
+            fg_color=COLOR_PANEL, border_color=COLOR_ERROR, border_width=1,
+            hover_color="#1a0010", text_color=COLOR_ERROR,
+            font=("Consolas", 11, "bold"), width=80, height=38).pack(side="left")
+        self.research_status = ctk.CTkLabel(btn_row, text="\u25cf IDLE",
+            font=("Consolas", 11), text_color=COLOR_TEXT_DIM)
+        self.research_status.pack(side="left", padx=15)
+        self.research_progress = ctk.CTkProgressBar(btn_row, width=160,
+            progress_color=COLOR_ACCENT, fg_color=COLOR_PANEL2)
+        self.research_progress.pack(side="left")
+        self.research_progress.set(0)
+
+        # ── Live Log
+        self.research_log = ctk.CTkTextbox(parent,
+            fg_color=COLOR_LOG, text_color="#00ff99",
+            font=("Consolas", 11), corner_radius=10,
+            border_color=COLOR_BORDER, border_width=1)
+        self.research_log.grid(row=2, column=0, sticky="nsew", padx=10, pady=(5, 10))
+
+        self._research_report = None
+        self._researcher = None
+
+    # ─── Deep Research Logic ────────────────────────────────────────────────────
+
+    def _research_rlog(self, msg: str):
+        """Append a message to the research live-log box (thread-safe)."""
+        def append():
+            self.research_log.configure(state="normal")
+            self.research_log.insert("end", f"{msg}\n")
+            self.research_log.see("end")
+            self.research_log.configure(state="disabled")
+        self.after(0, append)
+
+    def _research_start(self):
+        topic = self.research_topic.get().strip()
+        if not topic:
+            self._research_rlog("[ERROR] Please enter a research topic.")
+            return
+
+        if not getattr(self.agent, "page", None):
+            self._research_rlog("[ERROR] Initialize the Browser first (Command Center).")
+            return
+
+        self.research_btn_start.configure(state="disabled")
+        self.research_status.configure(text="● RESEARCHING…", text_color=COLOR_WARN)
+        self.research_progress.set(0)
+
+        # Clear log
+        self.research_log.configure(state="normal")
+        self.research_log.delete("1.0", "end")
+        self.research_log.configure(state="disabled")
+
+        max_src = int(self.research_src_count.get())
+        fmt = self.research_format.get()
+
+        import threading
+        threading.Thread(
+            target=self._research_thread, args=(topic, max_src, fmt), daemon=True
+        ).start()
+
+    def _research_thread(self, topic: str, max_src: int, fmt: str):
+        """Background thread — runs the async research pipeline."""
+        import asyncio
+        from deep_researcher import DeepResearcher, export_to_word, export_to_excel
+
+        llm = self.llm if self.use_ai else None
+
+        async def run():
+            researcher = DeepResearcher(
+                page=self.agent.page,
+                llm_provider=llm,
+                log_fn=self._research_rlog
+            )
+            self._researcher = researcher
+            return await researcher.run(topic, max_src)
+
+        try:
+            report = asyncio.run_coroutine_threadsafe(run(), self.loop).result(timeout=300)
+        except Exception as e:
+            self._research_rlog(f"[FATAL] Research failed: {e}")
+            self.after(0, lambda: self.research_status.configure(
+                text="● FAILED", text_color=COLOR_ERROR))
+            self.after(0, lambda: self.research_btn_start.configure(state="normal"))
+            return
+
+        self._research_report = report
+        self.after(0, lambda: self.research_progress.set(0.8))
+
+        # Export
+        from tkinter import filedialog
+        from datetime import datetime
+        import os
+
+        home = os.path.expanduser("~")
+        desktop = os.path.join(home, "OneDrive", "Desktop")
+        if not os.path.exists(desktop):
+            desktop = os.path.join(home, "Desktop")
+
+        safe_name = re.sub(r'[^\w\s-]', '', topic)[:40].strip().replace(' ', '_')
+        timestamp  = datetime.now().strftime('%Y%m%d_%H%M%S')
+        base_name  = f"Research_{safe_name}_{timestamp}"
+
+        def do_export():
+            ok_word = ok_excel = True
+
+            if fmt in ("Word (.docx)", "Both"):
+                fpath = filedialog.asksaveasfilename(
+                    title="Save Word Research Paper",
+                    initialdir=desktop,
+                    initialfile=f"{base_name}.docx",
+                    defaultextension=".docx",
+                    filetypes=[("Word Document", "*.docx"), ("All Files", "*.*")]
+                )
+                if fpath:
+                    ok_word = export_to_word(report, fpath)
+                    self._research_rlog(f"[EXPORT] Word saved → {fpath}")
+
+            if fmt in ("Excel (.xlsx)", "Both"):
+                fpath = filedialog.asksaveasfilename(
+                    title="Save Excel Research Paper",
+                    initialdir=desktop,
+                    initialfile=f"{base_name}.xlsx",
+                    defaultextension=".xlsx",
+                    filetypes=[("Excel Workbook", "*.xlsx"), ("All Files", "*.*")]
+                )
+                if fpath:
+                    ok_excel = export_to_excel(report, fpath)
+                    self._research_rlog(f"[EXPORT] Excel saved → {fpath}")
+
+            self.research_progress.set(1.0)
+            self.research_status.configure(
+                text="● COMPLETE ✓" if (ok_word and ok_excel) else "● EXPORT ERROR",
+                text_color=COLOR_SUCCESS if (ok_word and ok_excel) else COLOR_ERROR
+            )
+            self.research_btn_start.configure(state="normal")
+            self._research_rlog("[OMNI RESEARCH] ✅ All done!")
+
+        self.after(0, do_export)
+
+    def _research_stop(self):
+        if self._researcher:
+            self._researcher.stop()
+        self.research_status.configure(text="● STOPPED", text_color=COLOR_ERROR)
+        self.research_btn_start.configure(state="normal")
+        self._research_rlog("[USER] Research stopped.")
 
     # --- Settings Logic ---
     def test_and_save_api(self):
@@ -2848,17 +3037,25 @@ class App(ctk.CTk):
 
         self.biz_src_linkedin = ctk.CTkCheckBox(
             src_row, text="💼  LinkedIn",
-            font=("Consolas", 11, "bold"), text_color="#0077b5",
-            checkmark_color="#0077b5", fg_color="#0077b5", hover_color=COLOR_PANEL2
+            font=("Consolas", 11, "bold"), text_color="gray",
+            checkmark_color="gray", fg_color="gray", hover_color=COLOR_PANEL2,
+            state="disabled"
         )
-        self.biz_src_linkedin.pack(side="left", padx=10)
+        self.biz_src_linkedin.pack(side="left", padx=(10, 0))
+        ctk.CTkLabel(src_row, text="🔬 UNDER TESTING",
+                     font=("Consolas", 8, "bold"), text_color="#ff9900",
+                     fg_color="#1a1000", corner_radius=4).pack(side="left", padx=(2, 10))
 
         self.biz_src_instagram = ctk.CTkCheckBox(
             src_row, text="📸  Instagram",
-            font=("Consolas", 11, "bold"), text_color="#e1306c",
-            checkmark_color="#e1306c", fg_color="#e1306c", hover_color=COLOR_PANEL2
+            font=("Consolas", 11, "bold"), text_color="gray",
+            checkmark_color="gray", fg_color="gray", hover_color=COLOR_PANEL2,
+            state="disabled"
         )
-        self.biz_src_instagram.pack(side="left", padx=10)
+        self.biz_src_instagram.pack(side="left", padx=(10, 0))
+        ctk.CTkLabel(src_row, text="🔬 UNDER TESTING",
+                     font=("Consolas", 8, "bold"), text_color="#ff9900",
+                     fg_color="#1a1000", corner_radius=4).pack(side="left", padx=(2, 10))
 
         self.biz_ai_enrich = ctk.CTkCheckBox(
             src_row, text="🧠  AI Enrich",
@@ -2984,6 +3181,32 @@ class App(ctk.CTk):
         ctk.CTkLabel(export_frame, text="EXPORT:", font=("Consolas", 11, "bold"),
                      text_color=COLOR_TEXT_DIM).grid(row=0, column=0, sticky="w", padx=15, pady=10)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                            
+                                                                                    
+                                                                                    
         self.biz_export_path = ctk.CTkEntry(
             export_frame,
             placeholder_text="Save path (e.g. C:\\Users\\Me\\Desktop\\businesses.xlsx)",
@@ -3159,18 +3382,36 @@ class App(ctk.CTk):
 
     def _biz_export_excel(self):
         import os
-        path = self.biz_export_path.get().strip()
-        if not path:
-            # Default desktop path
-            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-            from datetime import datetime
-            fname = f"businesses_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            path = os.path.join(desktop, fname)
-            self.biz_export_path.insert(0, path)
-
+        from tkinter import filedialog
+        from datetime import datetime
+        
         if not self._biz_results:
             self._biz_log("[EXPORT] No data to export. Run a scrape first.")
             return
+
+        # Smart desktop path resolution (OneDrive support)
+        home = os.path.expanduser("~")
+        desktop = os.path.join(home, "OneDrive", "Desktop")
+        if not os.path.exists(desktop):
+            desktop = os.path.join(home, "Desktop")
+            
+        fname = f"businesses_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        
+        # Interactive file dialog
+        path = filedialog.asksaveasfilename(
+            title="Save Excel Data",
+            initialdir=desktop,
+            initialfile=fname,
+            defaultextension=".xlsx",
+            filetypes=[("Excel Workbook", "*.xlsx"), ("All Files", "*.*")]
+        )
+        
+        if not path:
+            return  # User cancelled
+
+        # Update input box with chosen path for transparency
+        self.biz_export_path.delete(0, 'end')
+        self.biz_export_path.insert(0, path)
 
         ok = self.biz_scraper.export_to_excel(self._biz_results, path)
         if ok:
@@ -3180,21 +3421,35 @@ class App(ctk.CTk):
 
     def _biz_export_csv(self):
         import os
-        path = self.biz_export_path.get().strip()
-        if not path:
-            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-            from datetime import datetime
-            fname = f"businesses_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            path = os.path.join(desktop, fname)
-            self.biz_export_path.insert(0, path)
-        else:
-            # Force .csv extension
-            if not path.lower().endswith(".csv"):
-                path = os.path.splitext(path)[0] + ".csv"
-
+        from tkinter import filedialog
+        from datetime import datetime
+        
         if not self._biz_results:
             self._biz_log("[EXPORT] No data to export. Run a scrape first.")
             return
+
+        home = os.path.expanduser("~")
+        desktop = os.path.join(home, "OneDrive", "Desktop")
+        if not os.path.exists(desktop):
+            desktop = os.path.join(home, "Desktop")
+            
+        fname = f"businesses_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        # Interactive file dialog
+        path = filedialog.asksaveasfilename(
+            title="Save CSV Data",
+            initialdir=desktop,
+            initialfile=fname,
+            defaultextension=".csv",
+            filetypes=[("CSV File", "*.csv"), ("All Files", "*.*")]
+        )
+        
+        if not path:
+            return  # User cancelled
+
+        # Update input box with chosen path for transparency
+        self.biz_export_path.delete(0, 'end')
+        self.biz_export_path.insert(0, path)
 
         ok = self.biz_scraper.export_to_csv(self._biz_results, path)
         if ok:
