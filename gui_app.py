@@ -2009,7 +2009,39 @@ class App(ctk.CTk):
             error_msg = str(e)
             self.after(0, lambda: self.lbl_api_status.configure(text=f"STATUS: FAILED - {error_msg}", text_color=COLOR_ERROR))
 
+    def _save_notification_config(self):
+        """Persist the notification settings to notifications.json."""
+        cfg = {
+            "enabled":        self.notif_enabled_var.get(),
+            "type":           self.notif_type_var.get(),
+            "style":          self.notif_style_var.get(),
+            "show_duration":  self.notif_dur_var.get(),
+            "custom_title":   self.notif_title_entry.get().strip(),
+            "custom_message": self.notif_msg_entry.get().strip(),
+            "update_version": self.notif_ver_entry.get().strip(),
+            "update_message": self.notif_update_msg_entry.get().strip(),
+        }
+        _save_notif_config(cfg)
+        self.lbl_notif_status.configure(text="✅  Notification saved! Will show on next launch.", text_color=COLOR_SUCCESS)
+        self.after(4000, lambda: self.lbl_notif_status.configure(text=""))
+
+    def _preview_notification(self):
+        """Show a live preview of the current notification settings."""
+        ntype    = self.notif_type_var.get()
+        style    = self.notif_style_var.get()
+        duration = self.notif_dur_var.get()
+        if ntype == "update":
+            title   = f"Update Available  v{self.notif_ver_entry.get().strip() or '?'}"
+            message = self.notif_update_msg_entry.get().strip() or "A new version is available!"
+            style   = "update"
+        else:
+            title   = self.notif_title_entry.get().strip() or "Notification"
+            message = self.notif_msg_entry.get().strip() or "Your message here."
+        if message:
+            NotificationBanner(self, title, message, style=style, duration=duration)
+
     def on_provider_change(self):
+
         """Show/hide provider-specific settings"""
         provider = self.provider_var.get()
         # Hide all panels first
