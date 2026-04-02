@@ -1,24 +1,30 @@
-2026/04/03-01:19:17.839 61a4 Reusing MANIFEST C:\Users\naqas\Desktop\Programming\Omni-Orca\browser_profile\Default\Local Storage\leveldb/MANIFEST-000001
-2026/04/03-01:19:17.848 61a4 Recovering log #13
-2026/04/03-01:19:17.851 61a4 Reusing old log C:\Users\naqas\Desktop\Programming\Omni-Orca\browser_profile\Default\Local Storage\leveldb/000013.log 
-2026/04/03-01:20:17.865 6b20 Level-0 table #16: started
-2026/04/03-01:20:17.876 6b20 Level-0 table #16: 201433 bytes OK
-2026/04/03-01:20:17.880 6b20 Delete type=0 #13
-2026/04/03-01:20:43.194 6b20 Level-0 table #18: started
-2026/04/03-01:20:43.205 6b20 Level-0 table #18: 129760 bytes OK
-2026/04/03-01:20:43.210 6b20 Delete type=0 #15
-2026/04/03-01:20:43.211 6b20 Compacting 4@0 + 1@1 files
-2026/04/03-01:20:43.223 6b20 Generated table #19@0: 164 keys, 282158 bytes
-2026/04/03-01:20:43.224 6b20 Compacted 4@0 + 1@1 files => 282158 bytes
-2026/04/03-01:20:43.226 6b20 compacted to: files[ 0 1 1 0 0 0 0 ]
-2026/04/03-01:20:43.227 6b20 Delete type=2 #8
-2026/04/03-01:20:43.227 6b20 Delete type=2 #10
-2026/04/03-01:20:43.227 6b20 Delete type=2 #12
-2026/04/03-01:20:43.227 6b20 Delete type=2 #16
-2026/04/03-01:20:43.227 6b20 Delete type=2 #18
-2026/04/03-01:20:50.537 6b20 Level-0 table #21: started
-2026/04/03-01:20:50.546 6b20 Level-0 table #21: 45130 bytes OK
-2026/04/03-01:20:50.549 6b20 Delete type=0 #17
-2026/04/03-01:21:14.465 6b20 Level-0 table #23: started
-2026/04/03-01:21:14.474 6b20 Level-0 table #23: 38474 bytes OK
-2026/04/03-01:21:14.477 6b20 Delete type=0 #20
+2026/04/03-02:13:12.961 4d50 Reusing MANIFEST C:\Users\naqas\Desktop\Programming\Omni-Orca\browser_profile\Default\Local Storage\leveldb/MANIFEST-000001
+2026/04/03-02:13:12.968 4d50 Recovering log #44
+2026/04/03-02:13:12.970 4d50 Level-0 table #47: started
+2026/04/03-02:13:12.981 4d50 Level-0 table #47: 179316 bytes OK
+2026/04/03-02:13:12.982 4d50 Recovering log #46
+2026/04/03-02:13:12.985 4d50 Reusing old log C:\Users\naqas\Desktop\Programming\Omni-Orca\browser_profile\Default\Local Storage\leveldb/000046.log 
+2026/04/03-02:13:12.988 4d50 Delete type=0 #44
+2026/04/03-02:14:13.007 6d3c Level-0 table #49: started
+2026/04/03-02:14:13.024 6d3c Level-0 table #49: 349618 bytes OK
+2026/04/03-02:14:13.027 6d3c Delete type=0 #46
+2026/04/03-02:14:13.028 6d3c Compacting 4@0 + 1@1 files
+2026/04/03-02:14:13.051 6d3c Generated table #50@0: 200 keys, 436175 bytes
+2026/04/03-02:14:13.051 6d3c Compacted 4@0 + 1@1 files => 436175 bytes
+2026/04/03-02:14:13.053 6d3c compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/04/03-02:14:13.054 6d3c Delete type=2 #41
+2026/04/03-02:14:13.054 6d3c Delete type=2 #43
+2026/04/03-02:14:13.054 6d3c Delete type=2 #45
+2026/04/03-02:14:13.054 6d3c Delete type=2 #47
+2026/04/03-02:14:13.054 6d3c Delete type=2 #49
+2026/04/03-02:15:45.305 6d3c Level-0 table #52: started
+2026/04/03-02:15:45.314 6d3c Level-0 table #52: 104705 bytes OK
+2026/04/03-02:15:45.317 6d3c Delete type=0 #48
+2026/04/03-02:20:13.500 6d3c Level-0 table #54: started
+2026/04/03-02:20:13.511 6d3c Level-0 table #54: 273932 bytes OK
+2026/04/03-02:20:13.514 6d3c Delete type=0 #51
+2026/04/03-02:22:44.898 6d3c Level-0 table #56: started
+2026/04/03-02:22:44.908 6d3c Level-0 table #56: 103683 bytes OK
+2026/04/03-02:22:44.911 6d3c Delete type=0 #53
+2026/04/03-02:26:39.693 4d50 Level-0 table #58: started
+2026/04/03-02:26:39.710 4d50 Level-0 table #58: 178894 bytes OK

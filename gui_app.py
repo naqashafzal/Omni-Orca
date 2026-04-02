@@ -177,8 +177,10 @@ class App(ctk.CTk):
         # --- Asyncio & Application State ---
         self.agent = BrowserAgent(headless=False)
         self.loop = asyncio.new_event_loop()
+        self.agent.loop = self.loop  # Give agent access to the loop for sync->async bridging
         self.agent_thread = threading.Thread(target=self.start_async_loop, daemon=True)
         self.agent_thread.start()
+
         
         try:
             self.commander = VoiceCommander()
@@ -1441,6 +1443,17 @@ class App(ctk.CTk):
 
         self.lbl_email_status = ctk.CTkLabel(email_frame, text="Not connected", font=("Consolas", 11), text_color="gray")
         self.lbl_email_status.pack(anchor="w", padx=15, pady=2)
+
+        # App password hint
+        hint_row = ctk.CTkFrame(email_frame, fg_color="transparent")
+        hint_row.pack(anchor="w", padx=15, pady=(0, 4))
+        ctk.CTkLabel(hint_row, text="⚠️  Gmail requires an App Password (not your regular password).",
+                     font=("Consolas", 10), text_color=COLOR_WARN).pack(side="left")
+        app_pw_link = ctk.CTkLabel(hint_row, text="  → Generate one here",
+                                   font=("Consolas", 10, "underline"), text_color="#00f0ff", cursor="hand2")
+        app_pw_link.pack(side="left")
+        app_pw_link.bind("<Button-1>", lambda e: __import__('webbrowser').open("https://myaccount.google.com/apppasswords"))
+
 
         row_email_btns = ctk.CTkFrame(email_frame, fg_color="transparent")
         row_email_btns.pack(fill="x", padx=15, pady=5)
