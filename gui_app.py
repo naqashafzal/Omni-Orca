@@ -1,33 +1,34 @@
 import customtkinter as ctk
+ctk.set_appearance_mode("dark")
 import asyncio
 import threading
 import sys
-from browser_agent import BrowserAgent
-from voice_commander import VoiceCommander
-from llm_provider import LLMClient
-from config_manager import ConfigManager
+from agents.browser_agent import BrowserAgent
+from utils.voice_commander import VoiceCommander
+from core.llm_provider import LLMClient
+from core.config_manager import ConfigManager
 import schedule
 import time
 import pandas as pd
-from tts_engine import TTSEngine
-from auth_handler import perform_login, PLATFORM_MAP
-from content_engine import ContentGenerator
+from utils.tts_engine import TTSEngine
+from utils.auth_handler import perform_login, PLATFORM_MAP
+from tools.content_engine import ContentGenerator
 from PIL import Image, ImageTk
-from trading_engine import TradingEngine, MarketData
-from trading_strategies import STRATEGIES
-from risk_manager import RiskManager, Portfolio, Position
-from exchange_client import ExchangeClient
-from browser_trading_client import BrowserTradingClient, HybridTradingClient
-from social_media_manager import SocialMediaManager
-from agent_orchestrator import AgentOrchestrator
-from os_agent import OSAgent
-from vision_agent import VisionAgent
-from email_agent import EmailAgent
-from calendar_agent import CalendarAgent
-from call_agent import CallAgent
-from wake_word_agent import WakeWordAgent
-from web_search_agent import WebSearchAgent
-from business_scraper import BusinessScraper
+from trading.trading_engine import TradingEngine, MarketData
+from trading.trading_strategies import STRATEGIES
+from trading.risk_manager import RiskManager, Portfolio, Position
+from trading.exchange_client import ExchangeClient
+from trading.browser_trading_client import BrowserTradingClient, HybridTradingClient
+from tools.social_media_manager import SocialMediaManager
+from core.agent_orchestrator import AgentOrchestrator
+from agents.os_agent import OSAgent
+from agents.vision_agent import VisionAgent
+from agents.email_agent import EmailAgent
+from agents.calendar_agent import CalendarAgent
+from agents.call_agent import CallAgent
+from agents.wake_word_agent import WakeWordAgent
+from agents.web_search_agent import WebSearchAgent
+from tools.business_scraper import BusinessScraper
 import re
 
 # ═══════════════════════════════════════════
@@ -48,6 +49,119 @@ COLOR_LOG        = "#070710"   # Terminal black
 COLOR_ERROR      = "#ff4466"   # Hot pink error
 COLOR_SUCCESS    = "#00ff99"   # Matrix green
 COLOR_WARN       = "#ffaa00"   # Amber warning
+
+# ═══════════════════════════════════════════
+# NOTIFICATION SYSTEM
+# ═══════════════════════════════════════════
+import json as _json
+import os as _os
+
+NOTIF_FILE = "notifications.json"
+
+def _load_notif_config():
+    try:
+        if _os.path.exists(NOTIF_FILE):
+            with open(NOTIF_FILE, 'r') as f:
+                return _json.load(f)
+    except:
+        pass
+    return None
+
+def _save_notif_config(cfg):
+    try:
+        with open(NOTIF_FILE, 'w') as f:
+            _json.dump(cfg, f, indent=4)
+    except:
+        pass
+
+
+class NotificationBanner(ctk.CTkToplevel):
+    """Animated sliding-in notification popup shown on startup."""
+    STYLE_MAP = {
+        "info":    {"accent": "#00f0ff", "icon": "ℹ️"},
+        "update":  {"accent": "#ffc857", "icon": "⬆️"},
+        "warning": {"accent": "#ff9900", "icon": "⚠️"},
+        "success": {"accent": "#00ff99", "icon": "✅"},
+    }
+
+    def __init__(self, parent, title, message, style="info", duration=8):
+        super().__init__(parent)
+        self.parent_win = parent
+        self.duration = duration
+        s = self.STYLE_MAP.get(style, self.STYLE_MAP["info"])
+        accent = s["accent"]
+        icon   = s["icon"]
+
+        self.overrideredirect(True)
+        self.attributes("-topmost", True)
+        self.configure(fg_color="#0e0e1a")
+        self.attributes("-alpha", 0.0)
+
+        # Size & position — bottom-right corner of parent
+        w, h = 380, 120
+        self.geometry(f"{w}x{h}")
+        self._target_x = parent.winfo_x() + parent.winfo_width() - w - 20
+        self._target_y = parent.winfo_y() + parent.winfo_height() - h - 20
+        self._start_y  = self._target_y + 60
+        self.geometry(f"{w}x{h}+{self._target_x}+{int(self._start_y)}")
+
+        # Left accent bar
+        bar = ctk.CTkFrame(self, width=5, fg_color=accent, corner_radius=0)
+        bar.pack(side="left", fill="y")
+
+        content = ctk.CTkFrame(self, fg_color="transparent")
+        content.pack(side="left", fill="both", expand=True, padx=12, pady=10)
+
+        # Title row
+        title_row = ctk.CTkFrame(content, fg_color="transparent")
+        title_row.pack(fill="x")
+        ctk.CTkLabel(title_row, text=f"{icon}  {title}",
+                     font=("Consolas", 13, "bold"), text_color=accent).pack(side="left")
+
+        # Close ×
+        ctk.CTkButton(title_row, text="×", width=24, height=24, corner_radius=4,
+                      fg_color="transparent", hover_color="#1e1e38",
+                      text_color="#5c6082", font=("Consolas", 14, "bold"),
+                      command=self._dismiss).pack(side="right")
+
+        # Message
+        ctk.CTkLabel(content, text=message, font=("Consolas", 11),
+                     text_color="#e8eaf6", wraplength=310,
+                     justify="left").pack(anchor="w", pady=(4, 0))
+
+        # Progress bar
+        self.progress = ctk.CTkProgressBar(self, height=3, fg_color="#1e1e38",
+                                            progress_color=accent, corner_radius=0)
+        self.progress.pack(side="bottom", fill="x")
+        self.progress.set(1.0)
+
+        self._animate_in()
+
+    def _animate_in(self, step=0):
+        total = 10
+        if step <= total:
+            alpha = step / total
+            progress_y = self._start_y + (self._target_y - self._start_y) * (step / total)
+            self.attributes("-alpha", min(alpha, 0.96))
+            self.geometry(f"+{self._target_x}+{int(progress_y)}")
+            self.after(20, lambda: self._animate_in(step + 1))
+        else:
+            self._tick_progress(self.duration * 1000)
+
+    def _tick_progress(self, remaining_ms):
+        if remaining_ms <= 0:
+            self._dismiss()
+            return
+        total_ms = self.duration * 1000
+        self.progress.set(remaining_ms / total_ms)
+        self.after(100, lambda: self._tick_progress(remaining_ms - 100))
+
+    def _dismiss(self):
+        try:
+            self.destroy()
+        except:
+            pass
+
 
 class App(ctk.CTk):
     def __init__(self):
@@ -325,6 +439,27 @@ class App(ctk.CTk):
             
         # Initial Selection
         self.select_tab("COMMAND CENTER")
+        
+        # Show startup notification after a short delay
+        self.after(1500, self._show_startup_notification)
+
+    def _show_startup_notification(self):
+        """Show notification popup on startup if enabled in notifications.json."""
+        cfg = _load_notif_config()
+        if not cfg or not cfg.get("enabled", False):
+            return
+        ntype = cfg.get("type", "custom")
+        if ntype == "update":
+            title   = f"Update Available  v{cfg.get('update_version', '?')}"
+            message = cfg.get("update_message", "A new version is available!")
+            style   = "update"
+        else:
+            title   = cfg.get("custom_title", "Notification")
+            message = cfg.get("custom_message", "")
+            style   = cfg.get("style", "info")
+        duration = int(cfg.get("show_duration", 8))
+        if message:
+            NotificationBanner(self, title, message, style=style, duration=duration)
 
     def select_tab(self, name):
         """Route sidebar click to show the corresponding frame with elite highlight"""
@@ -389,8 +524,21 @@ class App(ctk.CTk):
         self.panel_rec.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
         ctk.CTkLabel(self.panel_rec, text="MEMORY MODULE", font=("Consolas", 12, "bold"), text_color=COLOR_TEXT_DIM).pack(pady=5)
         
+        row_macro_name = ctk.CTkFrame(self.panel_rec, fg_color="transparent")
+        row_macro_name.pack(fill="x", padx=5, pady=(0, 0))
+        self.combo_macro = ctk.CTkComboBox(
+            row_macro_name, 
+            values=self._get_macro_list(), 
+            font=("Consolas", 11),
+            fg_color=COLOR_PANEL2,
+            border_color=COLOR_BORDER
+        )
+        self.combo_macro.pack(fill="x", padx=2)
+        if not self.combo_macro.get() or self.combo_macro.get() == "":
+            self.combo_macro.set("my_macro.json")
+        
         row_mem = ctk.CTkFrame(self.panel_rec, fg_color="transparent")
-        row_mem.pack(fill="both", expand=True, padx=5, pady=10)
+        row_mem.pack(fill="both", expand=True, padx=5, pady=5)
         
         self.btn_rec_start = ctk.CTkButton(row_mem, corner_radius=8, text="🔴 TRAIN", command=self.start_recording, fg_color="#7a0000", hover_color="#cc0000", text_color="white", font=("Consolas", 11, "bold"))
         self.btn_rec_start.pack(side="left", fill="x", expand=True, padx=2)
@@ -576,6 +724,119 @@ class App(ctk.CTk):
         # Current status
         self.lbl_model = ctk.CTkLabel(self.frame_model, text=f"CURRENT: {self.llm.get_provider_name().upper()}", font=("Consolas", 12))
         self.lbl_model.pack(anchor="w", padx=20, pady=(10, 20))
+
+        # ─── Notifications Section ───────────────────────────────────
+        frame_notif = ctk.CTkFrame(parent, fg_color=COLOR_PANEL, corner_radius=10)
+        frame_notif.pack(fill="x", padx=20, pady=10)
+
+        ctk.CTkLabel(frame_notif, text="📢  NOTIFICATIONS",
+                     font=("Consolas", 12, "bold")).pack(anchor="w", padx=20, pady=(20, 5))
+        ctk.CTkLabel(frame_notif,
+                     text="Configure the startup popup shown to users when they launch the app.",
+                     font=("Consolas", 10), text_color=COLOR_TEXT_DIM).pack(anchor="w", padx=20)
+
+        # Load current config
+        _nc = _load_notif_config() or {}
+
+        # Enable / Disable toggle
+        notif_row1 = ctk.CTkFrame(frame_notif, fg_color="transparent")
+        notif_row1.pack(anchor="w", padx=20, pady=(12, 4), fill="x")
+        ctk.CTkLabel(notif_row1, text="Enable Startup Notification:",
+                     font=("Consolas", 11)).pack(side="left")
+        self.notif_enabled_var = ctk.BooleanVar(value=_nc.get("enabled", True))
+        ctk.CTkSwitch(notif_row1, text="", variable=self.notif_enabled_var,
+                      onvalue=True, offvalue=False,
+                      progress_color=COLOR_ACCENT).pack(side="left", padx=12)
+
+        # Notification type
+        notif_row2 = ctk.CTkFrame(frame_notif, fg_color="transparent")
+        notif_row2.pack(anchor="w", padx=20, pady=4, fill="x")
+        ctk.CTkLabel(notif_row2, text="Type:", font=("Consolas", 11)).pack(side="left")
+        self.notif_type_var = ctk.StringVar(value=_nc.get("type", "custom"))
+        ctk.CTkSegmentedButton(notif_row2,
+            values=["custom", "update"], variable=self.notif_type_var,
+            font=("Consolas", 11), selected_color=COLOR_ACCENT,
+            selected_hover_color=COLOR_ACCENT_HOVER).pack(side="left", padx=12)
+
+        # Style dropdown
+        notif_row3 = ctk.CTkFrame(frame_notif, fg_color="transparent")
+        notif_row3.pack(anchor="w", padx=20, pady=4, fill="x")
+        ctk.CTkLabel(notif_row3, text="Style:", font=("Consolas", 11)).pack(side="left")
+        self.notif_style_var = ctk.StringVar(value=_nc.get("style", "info"))
+        ctk.CTkOptionMenu(notif_row3, values=["info", "update", "warning", "success"],
+                          variable=self.notif_style_var,
+                          font=("Consolas", 11), fg_color=COLOR_PANEL2,
+                          button_color=COLOR_ACCENT, button_hover_color=COLOR_ACCENT_HOVER).pack(side="left", padx=12)
+
+        # Duration slider
+        notif_row4 = ctk.CTkFrame(frame_notif, fg_color="transparent")
+        notif_row4.pack(anchor="w", padx=20, pady=4, fill="x")
+        ctk.CTkLabel(notif_row4, text="Show Duration (seconds):",
+                     font=("Consolas", 11)).pack(side="left")
+        self.notif_dur_var = ctk.IntVar(value=int(_nc.get("show_duration", 8)))
+        self.notif_dur_lbl = ctk.CTkLabel(notif_row4,
+            text=str(self.notif_dur_var.get()), font=("Consolas", 11), text_color=COLOR_ACCENT)
+        self.notif_dur_lbl.pack(side="right", padx=8)
+        ctk.CTkSlider(notif_row4, from_=3, to=30, number_of_steps=27,
+                      variable=self.notif_dur_var,
+                      button_color=COLOR_ACCENT, button_hover_color=COLOR_ACCENT_HOVER,
+                      command=lambda v: self.notif_dur_lbl.configure(text=str(int(v)))).pack(side="left", padx=12, fill="x", expand=True)
+
+        # Title field
+        notif_row5 = ctk.CTkFrame(frame_notif, fg_color="transparent")
+        notif_row5.pack(anchor="w", padx=20, pady=4, fill="x")
+        ctk.CTkLabel(notif_row5, text="Title:", font=("Consolas", 11), width=80).pack(side="left")
+        self.notif_title_entry = ctk.CTkEntry(notif_row5, placeholder_text="e.g. Welcome!",
+                                              font=("Consolas", 11), width=320)
+        self.notif_title_entry.pack(side="left", padx=10)
+        if _nc.get("custom_title"):
+            self.notif_title_entry.insert(0, _nc["custom_title"])
+
+        # Message field
+        notif_row6 = ctk.CTkFrame(frame_notif, fg_color="transparent")
+        notif_row6.pack(anchor="w", padx=20, pady=4, fill="x")
+        ctk.CTkLabel(notif_row6, text="Message:", font=("Consolas", 11), width=80).pack(side="left")
+        self.notif_msg_entry = ctk.CTkEntry(notif_row6,
+                                             placeholder_text="Your message to the user...",
+                                             font=("Consolas", 11), width=320)
+        self.notif_msg_entry.pack(side="left", padx=10)
+        if _nc.get("custom_message"):
+            self.notif_msg_entry.insert(0, _nc["custom_message"])
+
+        # Update version & message (for update type)
+        notif_row7 = ctk.CTkFrame(frame_notif, fg_color="transparent")
+        notif_row7.pack(anchor="w", padx=20, pady=4, fill="x")
+        ctk.CTkLabel(notif_row7, text="Update Ver:", font=("Consolas", 11), width=80).pack(side="left")
+        self.notif_ver_entry = ctk.CTkEntry(notif_row7, placeholder_text="3.1",
+                                             font=("Consolas", 11), width=80)
+        self.notif_ver_entry.pack(side="left", padx=10)
+        if _nc.get("update_version"):
+            self.notif_ver_entry.insert(0, _nc["update_version"])
+
+        ctk.CTkLabel(notif_row7, text="Update Msg:", font=("Consolas", 11)).pack(side="left", padx=(16,0))
+        self.notif_update_msg_entry = ctk.CTkEntry(notif_row7, placeholder_text="New version available!",
+                                                    font=("Consolas", 11), width=220)
+        self.notif_update_msg_entry.pack(side="left", padx=10)
+        if _nc.get("update_message"):
+            self.notif_update_msg_entry.insert(0, _nc["update_message"])
+
+        # Save & preview buttons
+        notif_btn_row = ctk.CTkFrame(frame_notif, fg_color="transparent")
+        notif_btn_row.pack(anchor="w", padx=20, pady=(12, 20))
+
+        ctk.CTkButton(notif_btn_row, text="💾  SAVE NOTIFICATION",
+                      font=("Consolas", 11, "bold"), corner_radius=8,
+                      fg_color=COLOR_ACCENT, hover_color=COLOR_ACCENT_HOVER, text_color="black",
+                      command=self._save_notification_config).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(notif_btn_row, text="▶  PREVIEW",
+                      font=("Consolas", 11, "bold"), corner_radius=8,
+                      fg_color=COLOR_PANEL2, hover_color="#2a2a50",
+                      command=self._preview_notification).pack(side="left")
+
+        self.lbl_notif_status = ctk.CTkLabel(frame_notif, text="",
+                                              font=("Consolas", 11), text_color=COLOR_SUCCESS)
+        self.lbl_notif_status.pack(anchor="w", padx=20, pady=(0, 10))
 
 
     def _setup_chat_tab(self):
@@ -963,9 +1224,9 @@ class App(ctk.CTk):
         self.lbl_social_status.configure(text="RESEARCHING TRENDS...", text_color="yellow")
         self.tts.speak("Researching trends")
         
-        threading.Thread(target=self._research_thread, args=(topic,)).start()
+        threading.Thread(target=self._social_research_thread, args=(topic,)).start()
 
-    def _research_thread(self, topic):
+    def _social_research_thread(self, topic):
         trends = asyncio.run_coroutine_threadsafe(self.social_manager.research_trends(topic), self.loop).result()
         
         self.after(0, lambda: self.txt_trends.delete("0.0", "end"))
@@ -1916,6 +2177,39 @@ class App(ctk.CTk):
         # Safest: run entire flow in async task, then update UI.
         self.run_async(self._ai_pipeline(text))
 
+    async def _get_best_screenshot(self):
+        if not self.vision_checkbox.get():
+            return None
+            
+        os_bytes = self.os_agent.take_screenshot() if self.godmode_checkbox.get() else None
+        browser_bytes = None
+        if self.agent.page:
+            try:
+                await self.agent.inject_som_overlay()
+                browser_bytes = await self.agent.get_screenshot_bytes()
+                await self.agent.remove_som_overlay()
+            except Exception:
+                pass
+                
+        if os_bytes and browser_bytes:
+            import io
+            from PIL import Image
+            img_os = Image.open(io.BytesIO(os_bytes))
+            img_browser = Image.open(io.BytesIO(browser_bytes))
+            width = max(img_os.width, img_browser.width)
+            height = img_os.height + img_browser.height
+            combined = Image.new('RGB', (width, height), color='black')
+            combined.paste(img_os, (0, 0))
+            combined.paste(img_browser, (0, img_os.height))
+            out_bytes = io.BytesIO()
+            combined.save(out_bytes, format='JPEG', quality=65)
+            return out_bytes.getvalue()
+        elif os_bytes:
+            return os_bytes
+        elif browser_bytes:
+            return browser_bytes
+        return None
+
     async def _ai_pipeline(self, text):
         # Reset stop flag and show stop button
         self.autopilot_stop_requested = False
@@ -1926,10 +2220,7 @@ class App(ctk.CTk):
         
         # 1. Capture Screen
         self.update_log_from_thread("CAPTURING SCREENSHOT...")
-        if self.godmode_checkbox.get():
-            screenshot = self.os_agent.take_screenshot()
-        else:
-            screenshot = await self.agent.get_screenshot_bytes()
+        screenshot = await self._get_best_screenshot()
         if screenshot:
             self.update_log_from_thread(f"SCREENSHOT CAPTURED ({len(screenshot)} bytes).")
         else:
@@ -1965,10 +2256,30 @@ class App(ctk.CTk):
             
             if action == "navigate":
                 await self._navigate_task(step.get("url"))
+            elif action == "click_id":
+                try:
+                    await self.agent.click_id(step.get("id"))
+                except Exception as e:
+                    self.update_log_from_thread(f">> ERROR EXECUTING CLICK_ID: {e}")
+                    break
+            elif action == "type_id":
+                try:
+                    await self.agent.type_id(step.get("id"), step.get("text"))
+                except Exception as e:
+                    self.update_log_from_thread(f">> ERROR EXECUTING TYPE_ID: {e}")
+                    break
             elif action == "click":
-                await self.agent.click(step.get("selector"))
+                try:
+                    await self.agent.click(step.get("selector"))
+                except Exception as e:
+                    self.update_log_from_thread(f">> ERROR EXECUTING CLICK: {e}")
+                    break
             elif action == "type":
-                await self.agent.type(step.get("selector"), step.get("text"))
+                try:
+                    await self.agent.type(step.get("selector"), step.get("text"))
+                except Exception as e:
+                    self.update_log_from_thread(f">> ERROR EXECUTING TYPE: {e}")
+                    break
             elif action == "wait":
                 sec = step.get("seconds", 1)
                 await asyncio.sleep(sec)
@@ -2051,6 +2362,11 @@ class App(ctk.CTk):
                 cmd = step.get("command")
                 if cmd:
                     try:
+                        # Force powershell execution since prompts ask for it, encode to bypass quote parsing bugs
+                        if "powershell" not in cmd.lower():
+                            import base64
+                            encoded = base64.b64encode(cmd.encode("utf-16-le")).decode("utf-8")
+                            cmd = f'powershell.exe -EncodedCommand {encoded}'
                         res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
                         out_str = res.stdout.strip() if res.stdout else ""
                         err_str = res.stderr.strip() if res.stderr else ""
@@ -2147,6 +2463,13 @@ class App(ctk.CTk):
         except Exception as e:
             self.update_log_from_thread(f"NAV ERROR: {e}")
 
+    def _get_macro_list(self):
+        import os
+        if not os.path.exists("recordings"):
+            return []
+        macros = [f for f in os.listdir("recordings") if f.endswith(".json")]
+        return macros
+
     # --- Recorder ---
     def start_recording(self):
         if not self.agent.page:
@@ -2157,15 +2480,37 @@ class App(ctk.CTk):
         self.btn_rec_start.configure(text="RECORDING...", fg_color="#cc0000")
 
     def save_recording(self):
-        self.agent.save_recording("recording.json")
-        self.log("✅ TRAINING SAVED. SEQUENCE MEMORIZED.")
+        macro_name = self.combo_macro.get() or "recording.json"
+        if not macro_name.endswith(".json"): macro_name += ".json"
+        
+        self.agent.save_recording(macro_name)
+        self.log(f"✅ TRAINING SAVED AS: {macro_name}")
         self.btn_rec_start.configure(text="🔴 TRAIN", fg_color="#7a0000")
+        
+        # Refresh combo box list
+        self.combo_macro.configure(values=self._get_macro_list())
+        self.combo_macro.set(macro_name)
 
     def replay_recording(self):
-        self.log("EXECUTING STORED SEQUENCE...")
-        self.run_async(self._replay_task("recording.json"))
+        macro_name = self.combo_macro.get() or "recording.json"
+        if not macro_name.endswith(".json"): macro_name += ".json"
+        
+        self.log(f"EXECUTING STORED SEQUENCE: {macro_name}...")
+        self.run_async(self._replay_task(macro_name))
 
     async def _replay_task(self, filename):
+        # Automatically spin up the browser if it crashed or was closed
+        try:
+            if not self.agent.page or self.agent.page.is_closed():
+                if self.godmode_checkbox.get():
+                    attached = await self.agent.attach_to_existing_browser()
+                    if not attached:
+                        await self.agent.start()
+                else:
+                    await self.agent.start()
+        except Exception:
+            pass  # Fallback gracefully
+            
         await self.agent.replay_recording(filename)
         self.update_log_from_thread("EXECUTION COMPLETE.")
 
@@ -2255,11 +2600,8 @@ class App(ctk.CTk):
                 iteration += 1
                 self.update_log_from_thread(f"AUTO-PILOT [{iteration}/{self.autopilot_max_iterations}]")
                 
-                # Capture screenshot
-                if self.godmode_checkbox.get():
-                    screenshot = self.os_agent.take_screenshot()
-                else:
-                    screenshot = await self.agent.get_screenshot_bytes()
+                # Capture best screenshot available
+                screenshot = await self._get_best_screenshot()
                 
                 # Get AI decision
                 loop = asyncio.get_running_loop()
@@ -2289,6 +2631,10 @@ class App(ctk.CTk):
                     try:
                         if action == "navigate":
                             await self._navigate_task(step.get("url"))
+                        elif action == "click_id":
+                            await self.agent.click_id(step.get("id"))
+                        elif action == "type_id":
+                            await self.agent.type_id(step.get("id"), step.get("text"))
                         elif action == "click":
                             await self.agent.click(step.get("selector"))
                         elif action == "type":
@@ -2337,6 +2683,11 @@ class App(ctk.CTk):
                             cmd = step.get("command")
                             if cmd:
                                 try:
+                                    # Encode to prevent quote parsing bugs
+                                    if "powershell" not in cmd.lower():
+                                        import base64
+                                        encoded = base64.b64encode(cmd.encode("utf-16-le")).decode("utf-8")
+                                        cmd = f'powershell.exe -EncodedCommand {encoded}'
                                     res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
                                     out_str = res.stdout.strip() if res.stdout else ""
                                     err_str = res.stderr.strip() if res.stderr else ""
@@ -2394,7 +2745,10 @@ class App(ctk.CTk):
     # --- Scheduler Logic ---
     def _scheduler_loop(self):
         while self.scheduler_running:
-            schedule.run_pending()
+            try:
+                schedule.run_pending()
+            except Exception as e:
+                self.update_log_from_thread(f"SCHEDULER THREAD ERROR: {e}")
             time.sleep(1)
 
     def add_scheduled_task(self):
@@ -2415,7 +2769,7 @@ class App(ctk.CTk):
         self.tts.speak("Task scheduled")
 
     def _execute_scheduled(self, t_type, t_target):
-        self.log(f"EXECUTING SCHEDULED TASK: {t_type} - {t_target}")
+        self.update_log_from_thread(f"EXECUTING SCHEDULED TASK: {t_type} - {t_target}")
         self.tts.speak("Executing scheduled task")
         if t_type == "REPLAY":
             self.run_async(self._replay_task(t_target))

@@ -1,10 +1,10 @@
 {
   "metadata": {
-    "name": "login to freelancer.com",
-    "created": "2026-01-14T14:18:06",
-    "mode": "autopilot",
-    "success": false,
-    "duration_seconds": 4.12,
+    "name": "User Trained Sequence",
+    "created": "2026-04-03T01:21:00",
+    "mode": "manual",
+    "success": true,
+    "duration_seconds": 83.85,
     "step_count": 0
   },
   "actions": []

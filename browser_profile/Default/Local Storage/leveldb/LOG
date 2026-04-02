@@ -1,3 +1,24 @@
-2026/04/01-16:59:02.320 8910 Reusing MANIFEST C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\Local Storage\leveldb/MANIFEST-000001
-2026/04/01-16:59:02.328 8910 Recovering log #9
-2026/04/01-16:59:02.333 8910 Reusing old log C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\Local Storage\leveldb/000009.log 
+2026/04/03-01:19:17.839 61a4 Reusing MANIFEST C:\Users\naqas\Desktop\Programming\Omni-Orca\browser_profile\Default\Local Storage\leveldb/MANIFEST-000001
+2026/04/03-01:19:17.848 61a4 Recovering log #13
+2026/04/03-01:19:17.851 61a4 Reusing old log C:\Users\naqas\Desktop\Programming\Omni-Orca\browser_profile\Default\Local Storage\leveldb/000013.log 
+2026/04/03-01:20:17.865 6b20 Level-0 table #16: started
+2026/04/03-01:20:17.876 6b20 Level-0 table #16: 201433 bytes OK
+2026/04/03-01:20:17.880 6b20 Delete type=0 #13
+2026/04/03-01:20:43.194 6b20 Level-0 table #18: started
+2026/04/03-01:20:43.205 6b20 Level-0 table #18: 129760 bytes OK
+2026/04/03-01:20:43.210 6b20 Delete type=0 #15
+2026/04/03-01:20:43.211 6b20 Compacting 4@0 + 1@1 files
+2026/04/03-01:20:43.223 6b20 Generated table #19@0: 164 keys, 282158 bytes
+2026/04/03-01:20:43.224 6b20 Compacted 4@0 + 1@1 files => 282158 bytes
+2026/04/03-01:20:43.226 6b20 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/04/03-01:20:43.227 6b20 Delete type=2 #8
+2026/04/03-01:20:43.227 6b20 Delete type=2 #10
+2026/04/03-01:20:43.227 6b20 Delete type=2 #12
+2026/04/03-01:20:43.227 6b20 Delete type=2 #16
+2026/04/03-01:20:43.227 6b20 Delete type=2 #18
+2026/04/03-01:20:50.537 6b20 Level-0 table #21: started
+2026/04/03-01:20:50.546 6b20 Level-0 table #21: 45130 bytes OK
+2026/04/03-01:20:50.549 6b20 Delete type=0 #17
+2026/04/03-01:21:14.465 6b20 Level-0 table #23: started
+2026/04/03-01:21:14.474 6b20 Level-0 table #23: 38474 bytes OK
+2026/04/03-01:21:14.477 6b20 Delete type=0 #20

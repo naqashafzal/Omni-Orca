@@ -1,0 +1,10 @@
+{
+    "enabled": true,
+    "type": "custom",
+    "custom_message": "Welcome to Omni-Orca! Type a command below to get started.",
+    "custom_title": "Welcome",
+    "update_version": "3.1",
+    "update_message": "A new version (v3.1) is available! Visit GitHub to download.",
+    "show_duration": 8,
+    "style": "info"
+}

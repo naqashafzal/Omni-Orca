@@ -1,7 +1,0 @@
-2026/01/23-19:50:24.743 4a30 Reusing MANIFEST C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\IndexedDB\https_www.freelancer.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/01/23-19:50:24.744 4a30 Recovering log #4
-2026/01/23-19:50:24.749 4a30 Reusing old log C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\IndexedDB\https_www.freelancer.com_0.indexeddb.leveldb/000004.log 
-2026/01/23-19:50:24.791 8204 Level-0 table #8: started
-2026/01/23-19:50:24.804 8204 Level-0 table #8: 1760209 bytes OK
-2026/01/23-19:50:24.806 8204 Delete type=0 #4
-2026/01/23-19:50:24.807 74d8 Manual compaction at level-0 from '\x00\x06\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x07\x00\x00\x00' @ 0 : 0; will stop at (end)
