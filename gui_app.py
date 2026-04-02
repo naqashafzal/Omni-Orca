@@ -1895,7 +1895,7 @@ class App(ctk.CTk):
     def _research_thread(self, topic: str, max_src: int, fmt: str):
         """Background thread — runs the async research pipeline."""
         import asyncio
-        from deep_researcher import DeepResearcher, export_to_word, export_to_excel
+        from tools.deep_researcher import DeepResearcher, export_to_word, export_to_excel
 
         llm = self.llm if self.use_ai else None
 

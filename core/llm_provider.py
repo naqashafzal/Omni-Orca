@@ -47,7 +47,7 @@ class GeminiProvider(LLMProvider):
 
     def __init__(self, api_key):
         import google.generativeai as genai
-        from prompts import SYSTEM_PROMPTS
+        from core.prompts import SYSTEM_PROMPTS
 
         self.api_key = api_key
         genai.configure(api_key=api_key)
@@ -175,7 +175,7 @@ class OllamaProvider(LLMProvider):
     """Local Ollama LLM Provider"""
 
     def __init__(self, model_name="llava:latest", base_url="http://localhost:11434"):
-        from prompts import SYSTEM_PROMPTS
+        from core.prompts import SYSTEM_PROMPTS
 
         self.model_name = model_name
         self.base_url = base_url
@@ -406,7 +406,7 @@ class OpenRouterProvider(LLMProvider):
     ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
     def __init__(self, api_key, model="google/gemini-2.0-flash-001"):
-        from prompts import SYSTEM_PROMPTS
+        from core.prompts import SYSTEM_PROMPTS
         self.api_key = api_key
         self.model = model
         self.prompts = SYSTEM_PROMPTS

@@ -279,7 +279,7 @@ class HybridTradingClient:
         # Initialize based on mode
         if mode in ["api", "auto"]:
             try:
-                from exchange_client import ExchangeClient
+                from trading.exchange_client import ExchangeClient
                 api_key = kwargs.get("api_key")
                 api_secret = kwargs.get("api_secret")
                 
