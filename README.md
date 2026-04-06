@@ -8,6 +8,8 @@
 [![Playwright](https://img.shields.io/badge/Browser-Playwright-2b3137.svg)](https://playwright.dev/)
 [![LLM](https://img.shields.io/badge/AI-Gemini%20%7C%20Ollama%20%7C%20Local-FF5722.svg)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![YouTube Tutorial](https://img.shields.io/badge/YouTube-Full%20Tutorial-red.svg?logo=youtube)](https://www.youtube.com/watch?v=LUl5nCLmCkY&feature=youtu.be)
+[![Support on Patreon](https://img.shields.io/badge/Patreon-Support%20Me-F96854.svg?logo=patreon)](https://patreon.com/naqashafzal)
 
 **OMNI** is a deeply integrated, autonomous, AI-driven desktop computer application built entirely in Python. Far beyond a simple chatbot, OMNI acts as a literal **digital employee**—combining Advanced Local & Cloud Large Language Models (LLMs) with deep OS-level environment control ("God Mode") and stealth Playwright browser automation.
 
@@ -149,6 +151,8 @@ I built this platform to push the boundaries of Agentic Automation. If you love 
 
 - **Follow my GitHub:** [github.com/naqashafzal](https://github.com/naqashafzal)
 - **Star ⭐ this Repository** to stay updated on future versions (v3.5 coming soon with Voice Agents!).
+- **📺 Watch the Full Tutorial:** [youtube.com/watch?v=LUl5nCLmCkY](https://www.youtube.com/watch?v=LUl5nCLmCkY&feature=youtu.be) — Step-by-step walkthrough of the entire OMNI system.
+- **❤️ Support on Patreon:** [patreon.com/naqashafzal](https://patreon.com/naqashafzal) — Help keep this project alive and fund future features!
 
 ---
 
