@@ -43,3 +43,21 @@ recordings/
 
 # Logs
 *.log
+
+# Cache
+.cache/
+*.cache
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pyc
+*.pyo
+*.pyd
+pip-cache/
+.pip/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
