@@ -1,4 +1,0 @@
-2026/03/28-14:49:53.507 45a0 Reusing MANIFEST C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/03/28-14:49:53.508 45a0 Recovering log #354
-2026/03/28-14:49:53.518 45a0 Reusing old log C:\Users\naqas\OneDrive\Desktop\Prog\neural-automater\browser_profile\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000354.log 
-2026/03/28-14:49:55.249 6bb0 Manual compaction at level-0 from '\x00"\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00#\x00\x00\x00' @ 0 : 0; will stop at (end)
